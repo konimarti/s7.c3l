@@ -489,3 +489,18 @@ fn void test_mutated_cr_fixture_differs() @test
 	want.buf[21] ^= 1;
 	assert(!same_bytes(out[:n], want.bytes()));
 }
+
+fn void test_be_helpers_reject_offsets_that_wrap() @test
+{
+	char[8] b;
+	assert(@catch(get_be16(b[..], usz::max)) == TRUNCATED);
+	assert(@catch(get_be32(b[..], usz::max)) == TRUNCATED);
+	assert(@catch(get_be16(b[..], usz::max - 1)) == TRUNCATED);
+	assert(@catch(get_be32(b[..], usz::max - 2)) == TRUNCATED);
+	assert(@catch(put_be16(b[..], usz::max, 1)) == BUFFER_TOO_SMALL);
+	assert(@catch(put_be32(b[..], usz::max, 1)) == BUFFER_TOO_SMALL);
+	assert(@catch(put_be16(b[:1], 0, 1)) == BUFFER_TOO_SMALL);
+	assert(@catch(get_be32(b[:3], 0)) == TRUNCATED);
+	assert(get_be16(b[:2], 0)!! == 0);
+	assert(get_be32(b[:4], 0)!! == 0);
+}

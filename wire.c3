@@ -5,26 +5,26 @@ module s7;
 
 fn ushort? get_be16(char[] b, usz off)
 {
-	if (off + 2 > b.len) return TRUNCATED~;
+	if (b.len < 2 || off > b.len - 2) return TRUNCATED~;
 	return (ushort)(((uint)b[off] << 8) | (uint)b[off + 1]);
 }
 
 fn uint? get_be32(char[] b, usz off)
 {
-	if (off + 4 > b.len) return TRUNCATED~;
+	if (b.len < 4 || off > b.len - 4) return TRUNCATED~;
 	return ((uint)b[off] << 24) | ((uint)b[off + 1] << 16) | ((uint)b[off + 2] << 8) | (uint)b[off + 3];
 }
 
 fn void? put_be16(char[] b, usz off, ushort v)
 {
-	if (off + 2 > b.len) return BUFFER_TOO_SMALL~;
+	if (b.len < 2 || off > b.len - 2) return BUFFER_TOO_SMALL~;
 	b[off] = (char)(v >> 8);
 	b[off + 1] = (char)v;
 }
 
 fn void? put_be32(char[] b, usz off, uint v)
 {
-	if (off + 4 > b.len) return BUFFER_TOO_SMALL~;
+	if (b.len < 4 || off > b.len - 4) return BUFFER_TOO_SMALL~;
 	b[off] = (char)(v >> 24);
 	b[off + 1] = (char)(v >> 16);
 	b[off + 2] = (char)(v >> 8);

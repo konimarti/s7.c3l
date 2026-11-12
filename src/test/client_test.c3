@@ -430,3 +430,18 @@ fn void test_a_transport_timeout_before_the_deadline_does_not_fail_the_job() @te
 	assert(r.mt.read_calls >= 4);
 	r.finish();
 }
+
+fn void test_a_transport_that_returns_nothing_or_too_much_ends_the_connection() @test
+{
+	fake_reset(usz::max);
+	ClientRig a;
+	a.handshake(FX_V12);
+	a.mt.read_zero_bytes = true;                                     // read must return 1..n bytes
+	assert(@catch(a.open_with(config_480())) == CLOSED);
+	a.alloc.free();
+	ClientRig b;
+	b.handshake(FX_V12);
+	b.mt.read_too_many = true;                                       // more bytes than the buffer holds
+	assert(@catch(b.open_with(config_480())) == CLOSED);
+	b.alloc.free();
+}

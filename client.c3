@@ -48,7 +48,8 @@ fn void? Client.connect(&self)
 	if (e.kind != CONNECTED) return e.error ? e.error~ : UNEXPECTED_PDU~;
 }
 
-// Sends a Disconnect Request (best effort), closes the transport once and releases the session. Idempotent.
+// Sends a Disconnect Request (best effort: none after the connection failed or ended), closes the transport once and
+// releases the session. Idempotent.
 fn void Client.close(&self)
 {
 	if (!self.attached) return;
@@ -143,6 +144,12 @@ fn Event? Client.wait_event(&self)
 		if (catch err = n)
 		{
 			self.report(err);
+			continue;
+		}
+		if (n == 0 || n > buf.len)
+		{
+			// the contract is 1..buf.len bytes: anything else is a broken transport, and looping on it would spin
+			self.report(CLOSED);
 			continue;
 		}
 		// a protocol violation fails the session; its events are picked up at the top of the loop

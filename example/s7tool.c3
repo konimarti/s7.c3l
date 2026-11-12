@@ -1,8 +1,8 @@
-module s7tool;
-import std::io;
+module s7tool_app;
+
+import s7tool;
 
 fn int main(String[] args)
 {
-	io::printfn("s7tool %s", env::PROJECT_VERSION);
-	return 0;
+	return s7tool::run(args);
 }

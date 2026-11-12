@@ -24,9 +24,15 @@ fn void? wait_for(NativeSocket sock, PollSubscribe events, time::Duration timeou
 	Poll[1] polls;
 	polls[0].socket = sock;
 	polls[0].events = events;
-	ulong? ready = net::poll_ms(polls[..], ms);
-	if (catch err = ready) return s7::CLOSED~;
-	if (ready == 0) return s7::TIMEOUT~;
+	// a wait interrupted by a signal fails with an error that is not the end of the connection: try again a few times
+	for (int attempt = 0; attempt < 3; attempt++)
+	{
+		ulong? ready = net::poll_ms(polls[..], ms);
+		if (catch err = ready) continue;
+		if (ready == 0) return s7::TIMEOUT~;
+		return;
+	}
+	return s7::CLOSED~;
 }
 
 fn void? wait_readable(TcpSocket* socket, time::Duration timeout) => wait_for(socket.sock, PollSubscribe.ANY_READ, timeout);

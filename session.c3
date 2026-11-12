@@ -161,14 +161,15 @@ struct Session
 	usz ev_len;
 }
 
-// Rejects limits that cannot work: max_pdu + 7 > max_frame, min_pdu > max_pdu, max_items 0.
+// Rejects limits and timeouts that cannot work (max_pdu + 7 > max_frame, min_pdu > max_pdu, a PDU size below what the
+// planner needs, max_items 0, a timeout that is not positive). A rejected init allocates nothing and leaves an empty session.
 fn void? Session.init(&self, SessionConfig cfg, Allocator allocator)
 {
+	*self = {};   // also after a rejection: the session is empty and free() is safe
 	Limits l = cfg.limits;
 	if ((uint)l.max_pdu + 7 > l.max_frame || l.min_pdu > l.max_pdu || l.max_items == 0) return INVALID_ARGUMENT~;
 	if (l.max_pdu < MIN_PLAN_PDU_SIZE || l.min_pdu < MIN_PLAN_PDU_SIZE) return INVALID_ARGUMENT~;   // the planner needs 30 bytes
 	if ((long)cfg.response_timeout <= 0 || (long)cfg.connect_timeout <= 0) return INVALID_ARGUMENT~;
-	*self = {};
 	self.cfg = cfg;
 	self.allocator = allocator;
 	self.inbuf = alloc::new_array(allocator, char, (sz)l.max_frame)[:l.max_frame];

@@ -1066,3 +1066,24 @@ fn void test_init_rejects_timeouts_that_are_not_positive() @test
 	s.free();
 	t.free();
 }
+
+fn void test_a_rejected_init_leaves_a_session_that_is_safe_to_free() @test
+{
+	TrackingAllocator t;
+	t.init(mem);
+	Session s;
+	// garbage in the struct, as in an uninitialised variable
+	s.state = READY;
+	s.in_len = 99;
+	s.out_len = 7;
+	s.ev_len = 3;
+	s.job.active = true;
+	SessionConfig cfg = config_480();
+	cfg.limits.max_items = 0;
+	assert(@catch(s.init(cfg, &t)) == INVALID_ARGUMENT);
+	assert(s.state == IDLE && s.in_len == 0 && s.out_len == 0 && s.ev_len == 0 && !s.job.active);
+	assert(s.inbuf.len == 0 && s.outbuf.len == 0);
+	s.free();                                           // must not touch memory it does not own
+	assert(t.allocation_count() == 0);
+	t.free();
+}

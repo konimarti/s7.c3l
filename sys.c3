@@ -2,6 +2,7 @@ module s7::sys;
 
 import libc;
 import std::net, std::net::os, std::net::tcp, std::time;
+import std::os::win32;
 
 // The only platform-specific code of the library, kept in one file. It adds what std::net lacks for a request/response
 // protocol: a wait with a timeout (std::net::poll, which is poll on POSIX and WSAPoll on Windows), TCP_NODELAY, and
@@ -79,14 +80,24 @@ const int EINTR_CODE = 4;
 const int EAGAIN_LINUX = 11;
 const int EAGAIN_BSD = 35;               // macOS and the BSDs
 const CInt MSG_DONTWAIT_BSD = 0x80;      // macOS and the BSDs
+const int WSAEWOULDBLOCK_CODE = 10035;   // Windows: the send buffer is full
+const usz WIN_SEND_CHUNK = 64 * 1024;
 
 // One send of as much of `data` as the socket takes without blocking and without SIGPIPE; returns the bytes sent, 0 when
 // the socket had no room after all (the caller waits again, so a stalled peer cannot hold the write past its bound). A
-// failure (a reset or closed connection) is CLOSED. On Windows the send has no per-call non-blocking flag and may block.
+// failure (a reset or closed connection) is CLOSED. On Windows the socket is switched to non-blocking around the send.
 fn usz? send_nosignal(TcpSocket* socket, char[] data)
 {
 $if env::WIN32:
-	sz n = libc::send(socket.sock, data.ptr, (int)data.len, 0);
+	// Windows has no per-call flag: the socket is made non-blocking for this one send, so a full buffer is
+	// WSAEWOULDBLOCK (nothing sent, the caller waits again) instead of a send that blocks past the deadline. The size
+	// is capped so a single call stays small.
+	usz len = data.len > WIN_SEND_CHUNK ? WIN_SEND_CHUNK : data.len;
+	if (catch err = socket.sock.set_non_blocking(true)) return s7::CLOSED~;
+	sz n = libc::send(socket.sock, data.ptr, (int)len, 0);
+	int wsa_code = (int)win32::wsaGetLastError();
+	if (catch err = socket.sock.set_non_blocking(false)) return s7::CLOSED~;
+	if (n < 0 && wsa_code == WSAEWOULDBLOCK_CODE) return 0;
 $else
 $if env::LINUX:
 	sz n = libc::send(socket.sock, data.ptr, (usz)data.len, os::MSG_NOSIGNAL | os::MSG_DONTWAIT);

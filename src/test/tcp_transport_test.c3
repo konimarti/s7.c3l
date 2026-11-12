@@ -176,12 +176,27 @@ fn void test_client_gets_closed_when_the_server_goes_away_in_the_middle_of_a_job
 
 fn void test_tcp_write_to_a_stalled_peer_times_out() @test
 {
-	// the server never reads: once the socket buffers are full the write must give up at its bound, not block
+	// The server never reads. How much the two socket buffers take differs by system (and Windows tunes them), so one
+	// big write is not guaranteed to block: write chunks until a write gives up, within a generous bound on the total.
+	// The write that gives up must fault with TIMEOUT, not block and not report a closed connection.
 	Loop l;
 	l.open();
-	usz size = 32 * 1024 * 1024;
-	char[] big = alloc::new_array(mem, char, (sz)size)[:size];
-	defer alloc::free(mem, big.ptr);
-	assert(@catch(l.client.write(big, time::ms(200))) == TIMEOUT);
+	usz chunk_size = 1024 * 1024;
+	char[] chunk = alloc::new_array(mem, char, (sz)chunk_size)[:chunk_size];
+	defer alloc::free(mem, chunk.ptr);
+	usz max_chunks = 1024;                                  // 1 GiB: far more than any pair of socket buffers holds
+	fault outcome = {};
+	usz written = 0;
+	while (written < max_chunks)
+	{
+		if (catch err = l.client.write(chunk, time::ms(200)))
+		{
+			outcome = err;
+			break;
+		}
+		written++;
+	}
+	assert(written < max_chunks);
+	assert(outcome == TIMEOUT);
 	l.finish();
 }

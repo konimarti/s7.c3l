@@ -617,3 +617,18 @@ fn void test_parse_value_time_kinds() @test
 	assert(@catch(parse_value(DTL, "2024-11-12", mem)) == INVALID_VALUE);
 	assert(@catch(parse_value(DATE_AND_TIME, "2024-11-12", mem)) == INVALID_VALUE);
 }
+
+fn void test_signalling_nan_survives_a_read_and_write_back() @test
+{
+	// 7F A0 00 01 is a signalling NaN; converting it through a double would quiet it
+	Value v = dec(REAL, "7F A0 00 01", mem);
+	assert(v.f != v.f);
+	expect_encodes_to(&v, 0, "7F A0 00 01");
+	Value neg = dec(REAL, "FF A0 00 01", mem);
+	expect_encodes_to(&neg, 0, "FF A0 00 01");
+	// a caller who assigns a new number gets that number, not the decoded bits
+	v.f = 2.0;
+	expect_encodes_to(&v, 0, "40 00 00 00");
+	Value d = dec(LREAL, "7F F4 00 00 00 00 00 01", mem);
+	expect_encodes_to(&d, 0, "7F F4 00 00 00 00 00 01");
+}

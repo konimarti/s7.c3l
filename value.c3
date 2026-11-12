@@ -42,6 +42,8 @@ struct Dtl
 struct Value
 {
 	ValueKind kind;
+	bool has_raw_real;   // REAL: `raw_real` holds the decoded binary32 bits
+	uint raw_real;       // kept so that a signalling NaN is written back unchanged (a double would quiet it)
 	union
 	{
 		bool b;        // BOOL
@@ -340,6 +342,18 @@ fn Value? decode_dtl(char[] b)
 // Time bases of S5TIME in milliseconds, index = bits 13-12.
 const uint[4] S5_BASE_MS = { 10, 100, 1000, 10000 };
 
+// The binary32 bits to write for a REAL value: the decoded bits while `f` still is the number they stand for
+// (any NaN counts as the same number), otherwise the bits of `(float)f`.
+fn uint real_bits(Value* value)
+{
+	if (value.has_raw_real)
+	{
+		double original = bitcast(value.raw_real, float);
+		if (original == value.f || (original != original && value.f != value.f)) return value.raw_real;
+	}
+	return bitcast((float)value.f, uint);
+}
+
 // Decode `bytes` (big-endian) as `kind`. Extra bytes after a fixed-size value are ignored. A short buffer is
 // VALUE_TOO_SHORT, an impossible content (BCD nibble, date out of range, string length) is INVALID_VALUE.
 // BOOL is bit 0 of bytes[0]; use decode_bool for another bit.
@@ -364,7 +378,10 @@ fn Value? decode_value(ValueKind kind, char[] bytes, Allocator allocator)
 		case DINT:
 			v.i = (int)get_be32(bytes, 0)!;
 		case REAL:
-			v.f = bitcast(get_be32(bytes, 0)!, float);
+			uint bits = get_be32(bytes, 0)!;
+			v.raw_real = bits;
+			v.has_raw_real = true;
+			v.f = bitcast(bits, float);
 		case LREAL:
 			ulong bits = ((ulong)get_be32(bytes, 0)! << 32) | (ulong)get_be32(bytes, 4)!;
 			v.f = bitcast(bits, double);
@@ -506,7 +523,7 @@ fn usz? encode_value(Value* value, char[] out, uint max_len)
 			if (value.i < -2147483648 || value.i > 2147483647) return INVALID_VALUE~;
 			put_be32(out, 0, (uint)(int)value.i)!;
 		case REAL:
-			put_be32(out, 0, bitcast((float)value.f, uint))!;
+			put_be32(out, 0, real_bits(value))!;
 		case LREAL:
 			ulong bits = bitcast(value.f, ulong);
 			put_be32(out, 0, (uint)(bits >> 32))!;

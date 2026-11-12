@@ -137,7 +137,7 @@ fn CotpPdu? decode_cotp(char[] frame)
 	switch (code & 0xF0)
 	{
 		case 0xF0:
-			if (li != 2) return BAD_COTP~;
+			if ((code & 0x0F) != 0 || li != 2) return BAD_COTP~;
 			if ((frame[6] & 0x80) == 0) return UNEXPECTED_PDU~;
 			pdu.kind = DT;
 			pdu.payload = frame[DT_HEADER_LEN..];
@@ -147,14 +147,14 @@ fn CotpPdu? decode_cotp(char[] frame)
 		case 0xD0:
 			pdu.kind = CC;
 		case 0x80:
-			if (li < 6) return BAD_COTP~;
+			if ((code & 0x0F) != 0 || li < 6) return BAD_COTP~;
 			pdu.kind = DR;
 			pdu.dst_ref = get_be16(frame, 6)!;
 			pdu.src_ref = get_be16(frame, 8)!;
 			pdu.reason = frame[10];
 			return pdu;
 		case 0x70:
-			if (li < 4) return BAD_COTP~;
+			if ((code & 0x0F) != 0 || li < 4) return BAD_COTP~;
 			pdu.kind = ER;
 			pdu.dst_ref = get_be16(frame, 6)!;
 			pdu.reason = frame[8];

@@ -529,3 +529,21 @@ fn void test_cotp_length_indicator_255_is_reserved() @test
 	f[12] = 247;
 	assert(@catch(decode_cotp(f[..])) == BAD_COTP);
 }
+
+fn void test_cotp_low_nibble_must_be_zero_for_dt_dr_er() @test
+{
+	Fixture dr = fx("03 00 00 0B 06 81 00 01 00 01 00");
+	assert(@catch(decode_cotp(dr.bytes())) == BAD_COTP);
+	Fixture er = fx("03 00 00 09 04 71 00 01 03");
+	assert(@catch(decode_cotp(er.bytes())) == BAD_COTP);
+	Fixture dt = fx("03 00 00 07 02 F1 80");
+	assert(@catch(decode_cotp(dt.bytes())) == BAD_COTP);
+	// CR and CC carry a credit in the low nibble and stay valid
+	Fixture cc = fx("03 00 00 0B 06 D1 00 01 00 01 00");
+	assert(decode_cotp(cc.bytes())!!.kind == CC);
+	Fixture cr = fx("03 00 00 0B 06 E1 00 00 00 01 00");
+	assert(decode_cotp(cr.bytes())!!.kind == CR);
+	// the exact codes still decode
+	Fixture dr_ok = fx("03 00 00 0B 06 80 00 01 00 01 00");
+	assert(decode_cotp(dr_ok.bytes())!!.kind == DR);
+}

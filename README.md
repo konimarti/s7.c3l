@@ -198,4 +198,17 @@ Checked only against the python-snap7 server and hand-derived frames, not agains
 * INT, REAL and DINT items are read as bytes; their answers (transport sizes 0x05 and 0x07) are untested.
 * The python-snap7 server answers SZL 0x001C with a record length of 0 (not like a real PLC), reads a bit as a whole byte
   and always negotiates 480 bytes; `cpu_info` refuses its 0x001C answer.
-* macOS and Windows builds are checked by the compiler for the target but run only in CI.
+* Rack and slot per model (S7-300/400: 0 and 2, S7-1200/1500: 0 and 1) and the raw TSAPs of the S7-200 and LOGO! are conventions
+  taken from public descriptions, not checked against hardware.
+* A setup answer with a larger PDU size than the offer is clamped to the offer (the peer never answers that way).
+* A DT TPDU without the end-of-transmission bit (a segmented COTP message) is refused with `UNEXPECTED_PDU`; PLCs are not known
+  to send them.
+* The parameter error code `D401` for an SZL list that is not available, the DATE limit of 65378 days (2168-12-31) and the
+  rejection of a weekday outside 1..7 in DATE_AND_TIME and DTL come from public descriptions, not from a device (the peer
+  reports an unavailable list with a failing data return code, which the client maps to `NOT_SUPPORTED` as well).
+* The clause numbers of the COTP standard (X.224) quoted in the design notes are from memory.
+* macOS and Windows builds are checked by the compiler for the target but run only in CI; the CI workflow's compiler download has
+  no checksum, and the release asset names and archive layout it assumes are unverified.
+* The tests were not run under AddressSanitizer, MemorySanitizer or ThreadSanitizer (they cannot start in the development
+  environment); leaks are checked with a tracking allocator in every session, client and parser test, and a fuzz test mutates
+  every fixture 100000 times against sessions in every state.

@@ -639,8 +639,9 @@ fn long? parse_integer(String text, bool signed)
 		{
 			return INVALID_VALUE~;
 		}
+		// reject before the multiplication can wrap
+		if (v > (0x7FFFFFFFFFFFFFFF - (ulong)d) / base) return INVALID_VALUE~;
 		v = v * base + d;
-		if (v > 0x7FFFFFFFFFFFFFFF) return INVALID_VALUE~;
 	}
 	return neg ? -(long)v : (long)v;
 }

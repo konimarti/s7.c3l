@@ -632,3 +632,20 @@ fn void test_signalling_nan_survives_a_read_and_write_back() @test
 	Value d = dec(LREAL, "7F F4 00 00 00 00 00 01", mem);
 	expect_encodes_to(&d, 0, "7F F4 00 00 00 00 00 01");
 }
+
+fn void test_integer_literals_that_overflow_are_rejected() @test
+{
+	// 2^64 wraps to 0 in 64 bit arithmetic and must not turn into a valid value
+	assert(@catch(parse_value(BYTE, "18446744073709551616", mem)) == INVALID_VALUE);
+	assert(@catch(parse_value(DWORD, "18446744073709551616", mem)) == INVALID_VALUE);
+	assert(@catch(parse_value(DWORD, "18446744073709551617", mem)) == INVALID_VALUE);
+	assert(@catch(parse_value(WORD, "36893488147419103232", mem)) == INVALID_VALUE);   // 2^65
+	assert(@catch(parse_value(INT, "18446744073709551616", mem)) == INVALID_VALUE);
+	assert(@catch(parse_value(INT, "-18446744073709551616", mem)) == INVALID_VALUE);
+	assert(@catch(parse_value(DINT, "9223372036854775808", mem)) == INVALID_VALUE);
+	assert(@catch(parse_value(BYTE, "0x10000000000000000", mem)) == INVALID_VALUE);    // 2^64 in hex
+	assert(@catch(parse_value(DWORD, "0x10000000000000001", mem)) == INVALID_VALUE);
+	assert(@catch(parse_value(DWORD, "0xFFFFFFFFFFFFFFFFFF", mem)) == INVALID_VALUE);
+	assert(parse_value(DWORD, "0xFFFFFFFF", mem)!!.u == 4294967295);
+	assert(parse_value(DINT, "-2147483648", mem)!!.i == -2147483648);
+}

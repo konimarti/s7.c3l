@@ -46,6 +46,16 @@ jobs:
       - name: s7tool --help
         run: build/s7tool --help
 
+      - name: Unit tests under AddressSanitizer
+        continue-on-error: true
+        run: c3c test --sanitize=address
+
+      - name: Check the scripts and the fuzz corpus
+        run: |
+          python3 -I scripts/test_check_yaml.py
+          python3 -I scripts/test_gen_fuzz_corpus.py
+          python3 -I scripts/gen_fuzz_corpus.py --check
+
   build-macos:
     runs-on: macos-latest
     steps:

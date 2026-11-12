@@ -340,8 +340,8 @@ fn void? check_response(S7Header* header, char function, usz count)
 	if (header.param[1] != count) return BAD_RESPONSE~;
 }
 
-// Byte length of a read data item from its transport size and length field: bits for 0x03, 0x04, 0x05 and 0x07
-// (a multiple of 8 for 0x04), bytes for 0x09, none for 0x00. Anything else is BAD_RESPONSE.
+// Byte length of a read data item from its transport size and length field: bits for 0x03 (exactly 1), 0x04, 0x05
+// and 0x07 (a multiple of 8 for 0x04), bytes for 0x09, none for 0x00. Anything else is BAD_RESPONSE.
 fn usz? data_item_bytes(char ts, usz len)
 {
 	switch (ts)
@@ -349,6 +349,8 @@ fn usz? data_item_bytes(char ts, usz len)
 		case 0x00:
 			return 0;
 		case 0x03:
+			if (len != 1) return BAD_RESPONSE~;   // a bit item is exactly one bit, in one byte
+			return 1;
 		case 0x05:
 		case 0x07:
 			return (len + 7) / 8;

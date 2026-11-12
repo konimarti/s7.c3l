@@ -398,3 +398,18 @@ fn void test_write_response_errors() @test
 	assert(!write_fault(one[..], "03 00 00 16 02 F0 80 32 03 00 00 00 03 00 02 00 01 00 00 05 01 0A", r[..]));
 	assert(r[0].status == OBJECT_DOES_NOT_EXIST);
 }
+
+fn void test_bit_responses_must_be_exactly_one_bit() @test
+{
+	Address[1] bit = { addr("DB1.DBX0.3") };
+	// transport size 0x03 with a length of 0, 2, 8 or 9 bits is not the single bit that was asked for
+	assert(read_fault_payload(bit[..], "32 03 00 00 00 02 00 02 00 05 00 00 04 01 FF 03 00 00 01") == BAD_RESPONSE);
+	assert(read_fault_payload(bit[..], "32 03 00 00 00 02 00 02 00 05 00 00 04 01 FF 03 00 02 01") == BAD_RESPONSE);
+	assert(read_fault_payload(bit[..], "32 03 00 00 00 02 00 02 00 05 00 00 04 01 FF 03 00 08 01") == BAD_RESPONSE);
+	assert(read_fault_payload(bit[..], "32 03 00 00 00 02 00 02 00 05 00 00 04 01 FF 03 00 09 01") == BAD_RESPONSE);
+	// the single bit is fine
+	Fixture ok = s7_frame("32 03 00 00 00 02 00 02 00 05 00 00 04 01 FF 03 00 01 01");
+	ItemResult[2] r;
+	read_results(bit[..], &ok, r[..])!!;
+	expect_data(r[0], "01");
+}

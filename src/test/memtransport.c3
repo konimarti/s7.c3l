@@ -26,6 +26,11 @@ struct MemTransport (Transport)
 	usz chunk;                         // at most this many bytes per read (0 = no limit)
 	bool eof_when_exhausted;           // true: CLOSED when the script is used up; false: TIMEOUT
 	bool fail_writes;                  // every write faults with CLOSED
+	usz early_timeouts;                // this many reads return TIMEOUT at once although data is waiting
+	time::Clock* clock_ref;            // a silent PLC: each TIMEOUT moves this clock ahead by `advance`
+	time::Duration advance;
+	bool read_zero_bytes;              // a misbehaving transport: read returns 0
+	bool read_too_many;                // a misbehaving transport: read returns more than the buffer holds
 
 	char[MEM_WRITTEN_CAP] written;
 	usz written_len;
@@ -69,11 +74,20 @@ fn usz? MemTransport.read(&self, char[] buf, time::Duration timeout) @dynamic
 {
 	if (self.read_calls < MEM_RECORDS) self.read_timeouts[self.read_calls] = timeout;
 	self.read_calls++;
+	assert(self.read_calls < 5000, "the client keeps reading a transport that never delivers");
+	if (self.read_zero_bytes) return 0;
+	if (self.read_too_many) return buf.len + 1;
+	if (self.early_timeouts > 0)
+	{
+		self.early_timeouts--;
+		return TIMEOUT~;
+	}
 	usz end = self.available_end();
 	if (self.read_pos >= end)
 	{
 		// nothing to read: either the stream ended or the PLC stays silent
 		if (self.read_pos >= self.script_len && self.eof_when_exhausted) return CLOSED~;
+		if (self.clock_ref) *self.clock_ref = (*self.clock_ref).add_duration(self.advance);   // time passes while nothing arrives
 		return TIMEOUT~;
 	}
 	usz n = end - self.read_pos;

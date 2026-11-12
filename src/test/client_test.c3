@@ -41,6 +41,8 @@ fn void ClientRig.handshake(&self, String answer)
 fn void? ClientRig.open_with(&self, SessionConfig cfg)
 {
 	self.alloc.init(mem);
+	self.mt.clock_ref = &g_fake_now;                                 // a silent PLC lets the test clock run
+	self.mt.advance = time::sec(6);
 	return self.c.open(&self.mt, cfg, &self.alloc, &fake_clock);
 }
 
@@ -411,4 +413,20 @@ fn void test_a_transport_from_another_library_through_a_cast() @test
 	assert(other.calls > 0 && other.inner.close_calls == 1);
 	assert(!t.has_leaks());
 	t.free();
+}
+
+fn void test_a_transport_timeout_before_the_deadline_does_not_fail_the_job() @test
+{
+	fake_reset(usz::max);
+	ClientRig r;
+	r.handshake(FX_V12);
+	r.mt.reply(FX_V21, 3);
+	r.open_480();
+	r.mt.early_timeouts = 3;                                         // short waits that end before the 5 s deadline
+	char[] bytes = r.c.read_bytes(addr("DB1.DBW2"), &r.alloc)!!;
+	Fixture want = fx("12 34");
+	assert(same_bytes(bytes, want.bytes()));
+	alloc::free(&r.alloc, bytes.ptr);
+	assert(r.mt.read_calls >= 4);
+	r.finish();
 }

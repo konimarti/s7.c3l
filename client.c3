@@ -109,20 +109,13 @@ fn void Client.flush(&self)
 	self.session.consume_output(out.len);
 }
 
-// A transport fault: a timeout is a missed deadline, anything else ends the stream.
+// A transport fault. A timeout needs no report: the loop recomputes the time left, and only a deadline that has really
+// passed reaches the session (a transport may time out earlier than the deadline, for example a short poll slice).
+// Anything else ends the stream.
 fn void Client.report(&self, fault err)
 {
-	time::Clock now = self.clock();
-	if (err == TIMEOUT)
-	{
-		// the transport says time is up: if the clock disagrees (it is slightly behind) the deadline counts as reached
-		time::Clock deadline = self.session.next_deadline();
-		self.session.on_timeout(deadline != (time::Clock)0 && now < deadline ? deadline : now);
-	}
-	else
-	{
-		self.session.on_closed(err == CLOSED ? CLOSED : err, now);
-	}
+	if (err == TIMEOUT) return;
+	self.session.on_closed(err, self.clock());
 }
 
 // Runs the session until it has an event to report: sends output, reads input, feeds it, watches the deadline. A

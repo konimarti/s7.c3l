@@ -24,11 +24,28 @@ fn void? wait_for(NativeSocket sock, PollSubscribe events, time::Duration timeou
 	Poll[1] polls;
 	polls[0].socket = sock;
 	polls[0].events = events;
-	// a wait interrupted by a signal fails with an error that is not the end of the connection: try again a few times
+	// A wait interrupted by a signal is repeated with the time that is left; any other failure ends the connection.
+	time::Clock start = time::clock::now();
+	long wait_ms = ms;
 	for (int attempt = 0; attempt < 3; attempt++)
 	{
-		ulong? ready = net::poll_ms(polls[..], ms);
-		if (catch err = ready) continue;
+		ulong? ready = net::poll_ms(polls[..], wait_ms);
+		if (catch err = ready)
+		{
+$if !env::WIN32:
+			if ((int)libc::errno() == EINTR_CODE)
+			{
+				if (ms >= 0)
+				{
+					long used = time::clock::now().nano_diff(start).to_ms();
+					if (used >= ms) return s7::TIMEOUT~;
+					wait_ms = ms - used;
+				}
+				continue;
+			}
+$endif
+			return s7::CLOSED~;
+		}
 		if (ready == 0) return s7::TIMEOUT~;
 		return;
 	}

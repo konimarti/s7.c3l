@@ -20,16 +20,27 @@ def run_check(text):
         return r.returncode, r.stdout
 
 
+SHA = "11d5960a326750d5838078e36cf38b85af677262"
+
+
 def job(name, extra=""):
     return f"""  {name}:
     runs-on: x
+    defaults:
+      run:
+        shell: bash
     steps:
+      - uses: actions/checkout@{SHA} # v4.4.0
       - name: tests
         run: c3c test
       - name: build
         run: c3c build s7tool
+      - name: build the other tool
+        run: c3c build peercheck
       - name: help
         {extra}run: build/s7tool --help
+      - name: version
+        run: build/s7tool --version
 """
 
 
@@ -38,7 +49,7 @@ def workflow(jobs, head="on:\n  push:\n  pull_request:\n  workflow_dispatch:\nen
 
 
 GOOD = workflow(
-    [job("build-linux"), job("build-macos"), job("build-windows", "shell: bash\n        ")],
+    [job("build-linux"), job("build-macos"), job("build-windows")],
     head="permissions:\n  contents: read\non:\n  push:\n  pull_request:\n  workflow_dispatch:\nenv:\n  C3_VERSION: v0.8.6\n",
 )
 
@@ -85,11 +96,37 @@ class CheckYaml(unittest.TestCase):
         fine = GOOD.replace("run: c3c test", 'env:\n          INPUT_VERSION: ${{ github.event.inputs.version }}\n        run: |\n          VERSION="${INPUT_VERSION:-v0.8.6}"\n          c3c test', 1)
         self.assertEqual(run_check(fine)[0], 0)
 
-    def test_the_windows_help_step_needs_bash(self):
-        bad = GOOD.replace("shell: bash\n        ", "")
+    def test_scripts_must_run_under_bash(self):
+        bad = GOOD.replace("    defaults:\n      run:\n        shell: bash\n", "")
         code, out = run_check(bad)
         self.assertEqual(code, 1, out)
-        self.assertIn("shell: bash", out)
+        self.assertIn("bash", out)
+        # a shell on every step is as good as the default
+        steps = bad.replace("        run: ", "        shell: bash\n        run: ")
+        self.assertEqual(run_check(steps)[0], 0)
+
+    def test_actions_are_pinned_to_a_commit_sha_with_a_version_comment(self):
+        for bad_line in ("      - uses: actions/checkout@v4\n", "      - uses: actions/checkout@main\n",
+                         "      - uses: actions/checkout@%s\n" % SHA, "      - uses: actions/checkout@%s # latest\n" % SHA,
+                         "      - uses: actions/checkout@%s\n" % SHA[:39]):
+            bad = GOOD.replace("      - uses: actions/checkout@%s # v4.4.0\n" % SHA, bad_line, 1)
+            code, out = run_check(bad)
+            self.assertEqual(code, 1, bad_line + out)
+            self.assertIn("checkout", out)
+
+    def test_pip_packages_are_pinned_exactly(self):
+        bad = GOOD.replace("run: c3c test", "run: python3 -m pip install python-snap7", 1)
+        code, out = run_check(bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn("python-snap7", out)
+        for fine in ("python3 -m pip install python-snap7==3.5.0", ".venv/bin/pip install --upgrade pip==24.0 python-snap7==3.5.0"):
+            self.assertNotIn("pip package", run_check(GOOD.replace("run: c3c test", "run: " + fine, 1))[1])
+
+    def test_every_tool_is_built_and_the_version_is_printed(self):
+        for gone in ("run: c3c build peercheck", "run: build/s7tool --version"):
+            bad = GOOD.replace(gone, "run: echo nothing", 1)
+            code, out = run_check(bad)
+            self.assertEqual(code, 1, gone + out)
 
     def test_the_token_is_read_only(self):
         bad = GOOD.replace("permissions:\n  contents: read\n", "")
@@ -99,6 +136,9 @@ class CheckYaml(unittest.TestCase):
 
     def test_the_peer_job_uses_a_venv_and_fails_when_the_peer_does_not_start(self):
         peer = """  peer:
+    defaults:
+      run:
+        shell: bash
     steps:
       - run: python3 -m pip install python-snap7
       - run: |
@@ -110,7 +150,7 @@ class CheckYaml(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("venv", out)
         self.assertIn("exit 1", out)
-        fine = peer.replace("python3 -m pip install", ".venv/bin/pip install").replace("          done\n", "          done\n          grep -q READY peer.log || exit 1\n") + "      - run: python3 -m venv .venv\n"
+        fine = peer.replace("python3 -m pip install python-snap7", ".venv/bin/pip install python-snap7==3.5.0").replace("          done\n", "          done\n          grep -q READY peer.log || exit 1\n") + "      - run: python3 -m venv .venv\n"
         self.assertEqual(run_check(GOOD + fine)[0], 0)
 
     def test_the_real_workflow_is_ok(self):

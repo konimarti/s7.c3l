@@ -17,6 +17,8 @@ REQUIRED_JOBS = ["build-linux", "build-macos", "build-windows"]
 REQUIRED_STEPS = {
     "c3c test": r"^\s*c3c test\b",
     "c3c build s7tool": r"^\s*c3c build s7tool\b",
+    "c3c build peercheck": r"^\s*c3c build peercheck\b",
+    "s7tool --version": r"^\s*(\S*[/\\])?s7tool(\.exe)? --version\b",
     "s7tool --help": r"^\s*(\S*[/\\])?s7tool(\.exe)? --help\b",
 }
 
@@ -79,9 +81,41 @@ def job_blocks(text):
     return {name: "\n".join(body) for name, body in blocks.items()}
 
 
-def check(text):
-    text = strip_comments(text)
+def bash_default(body):
+    """True when the job sets `defaults: run: shell: bash`."""
+    return re.search(r"defaults:\s*\n\s*run:\s*\n\s*shell:\s*bash", body) is not None
+
+
+def steps_with_run(body):
+    return [st for st in re.split(r"\n      - ", body) if re.search(r"(^|\n)\s*(- )?run:", st)]
+
+
+def check_pins(raw):
+    """Every action is pinned to a full commit SHA with the version as a comment; every pip package to an exact version."""
     problems = []
+    for line in raw.split("\n"):
+        m = re.match(r"^\s*(?:- )?uses:\s*(\S+)@(\S+)\s*(#.*)?$", line)
+        if m:
+            if not re.fullmatch(r"[0-9a-f]{40}", m.group(2)):
+                problems.append("action %s is not pinned to a commit SHA (found @%s)" % (m.group(1), m.group(2)))
+            elif not m.group(3) or not re.match(r"#\s*v\d", m.group(3)):
+                problems.append("action %s is pinned but its line has no '# vX.Y.Z' comment" % m.group(1))
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        pm = re.search(r"\bpip3?\s+install\s+(.*)$", stripped)
+        if pm:
+            for token in pm.group(1).split():
+                if token.startswith("-") or token.startswith("$") or token.startswith("."):
+                    continue
+                if "==" not in token:
+                    problems.append("pip package %s is not pinned with ==" % token)
+    return problems
+
+
+def check(text):
+    problems = check_pins(text)
+    text = strip_comments(text)
     head = text.split("\njobs:")[0]
     for trigger in REQUIRED_TRIGGERS:
         if trigger not in head:
@@ -110,8 +144,11 @@ def check(text):
         if "windows" in name:
             # the default shell on Windows is PowerShell: the help step runs under bash, or names the .exe
             for step in re.split(r"\n      - ", body):
-                if re.search(r"s7tool(\.exe)? --help", step) and "shell: bash" not in step and "s7tool.exe" not in step:
+                if re.search(r"s7tool(\.exe)? --help", step) and not bash_default(body) and "shell: bash" not in step and "s7tool.exe" not in step:
                     problems.append("the s7tool --help step of %s needs shell: bash (or the .exe name)" % name)
+        if name in REQUIRED_JOBS or name == "peer":
+            if not bash_default(body) and not all("shell: bash" in st for st in steps_with_run(body)):
+                problems.append("job %s should run every script under bash (defaults: run: shell: bash)" % name)
         if name == "peer":
             if "venv" not in body:
                 problems.append("job peer should install python-snap7 into a venv (the system Python refuses pip)")

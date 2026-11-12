@@ -21,11 +21,13 @@ env:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup C3
-        shell: bash
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
@@ -37,14 +39,26 @@ jobs:
           tar -xzf /tmp/c3.tar.gz -C /opt/c3 --strip-components=1
           echo "/opt/c3" >> "$GITHUB_PATH"
 
+      - name: Tool versions
+        run: |
+          c3c --version
+          python3 --version
+          uname -a
+
       - name: Run unit tests
         run: c3c test
 
       - name: Build s7tool
         run: c3c build s7tool
 
+      - name: Build peercheck
+        run: c3c build peercheck
+
       - name: s7tool --help
         run: build/s7tool --help
+
+      - name: s7tool --version
+        run: build/s7tool --version
 
       - name: Unit tests under AddressSanitizer
         continue-on-error: true
@@ -58,11 +72,13 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup C3
-        shell: bash
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
@@ -73,8 +89,14 @@ jobs:
           curl -fsSL -o /tmp/c3.zip "https://github.com/c3lang/c3c/releases/download/${VERSION}/c3-macos.zip"
           unzip -q /tmp/c3.zip -d /tmp/c3dl
           C3C=$(find /tmp/c3dl -type f -name c3c | head -1)
+          test -n "$C3C" || { echo "c3c not found in the archive"; exit 1; }
           chmod +x "$C3C"
           echo "$(dirname "$C3C")" >> "$GITHUB_PATH"
+
+      - name: Tool versions
+        run: |
+          c3c --version
+          sw_vers
 
       - name: Run unit tests
         run: c3c test
@@ -82,16 +104,24 @@ jobs:
       - name: Build s7tool
         run: c3c build s7tool
 
+      - name: Build peercheck
+        run: c3c build peercheck
+
       - name: s7tool --help
         run: build/s7tool --help
 
+      - name: s7tool --version
+        run: build/s7tool --version
+
   build-windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup C3
-        shell: bash
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
@@ -102,7 +132,13 @@ jobs:
           curl -fsSL -o /tmp/c3.zip "https://github.com/c3lang/c3c/releases/download/${VERSION}/c3-windows.zip"
           unzip -q /tmp/c3.zip -d /tmp/c3dl
           C3C=$(find /tmp/c3dl -type f -name c3c.exe | head -1)
+          test -n "$C3C" || { echo "c3c.exe not found in the archive"; exit 1; }
           echo "$(cygpath -w "$(dirname "$C3C")")" >> "$GITHUB_PATH"
+
+      - name: Tool versions
+        run: |
+          c3c --version
+          bash --version | head -1
 
       - name: Run unit tests
         run: c3c test
@@ -110,19 +146,26 @@ jobs:
       - name: Build s7tool
         run: c3c build s7tool
 
+      - name: Build peercheck
+        run: c3c build peercheck
+
       - name: s7tool --help
-        shell: bash
-        run: build/s7tool --help
+        run: build/s7tool.exe --help
+
+      - name: s7tool --version
+        run: build/s7tool.exe --version
 
   # Optional: the same tests against the python-snap7 server. Does not fail the workflow while the peer is new.
   peer:
     runs-on: ubuntu-latest
     continue-on-error: true
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup C3
-        shell: bash
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
@@ -137,7 +180,8 @@ jobs:
       - name: Install python-snap7 into a venv
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install python-snap7
+          .venv/bin/pip install python-snap7==3.5.0
+          .venv/bin/pip list
 
       - name: Start the peer
         run: |

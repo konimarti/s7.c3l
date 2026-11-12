@@ -308,8 +308,10 @@ fn void FuzzRig.finish(&self)
 {
 	self.s.free();
 	assert(!self.alloc.inner.has_leaks(), "the session leaked memory");
-	assert(self.alloc.largest <= (sz)FUZZ_MAX_FRAME || self.alloc.largest <= (sz)FUZZ_MAX_REQUEST, "an allocation above the limits: %d", (int)self.alloc.largest);
-	assert(self.alloc.largest <= (sz)FUZZ_MAX_REQUEST, "an allocation above max_request_bytes: %d", (int)self.alloc.largest);
+	// The largest single allocation is the 1000-byte payload of the big read (scenario 5), below max_request_bytes; the two
+	// frame buffers are max_frame each. Nothing the peer says may make an allocation larger than either limit.
+	sz bound = (sz)(FUZZ_MAX_FRAME > FUZZ_MAX_REQUEST ? FUZZ_MAX_FRAME : FUZZ_MAX_REQUEST);
+	assert(self.alloc.largest <= bound, "an allocation of %d bytes is above the limits", (int)self.alloc.largest);
 	self.alloc.inner.free();
 }
 

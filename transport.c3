@@ -42,12 +42,12 @@ fn TcpTransport? tcp_connect(String host, int port = 102, time::Duration timeout
 	t.socket = socket;
 	if (catch err = sys::set_nodelay(&t.socket))
 	{
-		t.socket.close()!!;
+		if (catch closing = t.socket.close()) {}   // the error to report is the one that made us give up
 		return err~;
 	}
 	if (catch err = sys::prepare_sends(&t.socket))
 	{
-		t.socket.close()!!;
+		if (catch closing = t.socket.close()) {}   // the error to report is the one that made us give up
 		return err~;
 	}
 	t.open = true;

@@ -396,3 +396,22 @@ fn void test_dump_offsets_are_not_cut_at_four_digits() @test
 	assert(!t.has_leaks());
 	t.free();
 }
+
+fn void test_escape_hides_characters_that_can_spoof_the_display() @test
+{
+	// bidirectional controls: U+202A..U+202E and U+2066..U+2069
+	expect_escaped(fx("41 E2 80 AE 42").bytes(), "A\\xE2\\x80\\xAEB");
+	expect_escaped(fx("E2 80 AA").bytes(), "\\xE2\\x80\\xAA");
+	expect_escaped(fx("E2 81 A6").bytes(), "\\xE2\\x81\\xA6");
+	expect_escaped(fx("E2 81 A9").bytes(), "\\xE2\\x81\\xA9");
+	// zero-width and directional marks U+200B..U+200F
+	expect_escaped(fx("E2 80 8B").bytes(), "\\xE2\\x80\\x8B");
+	expect_escaped(fx("E2 80 8F").bytes(), "\\xE2\\x80\\x8F");
+	// line and paragraph separators U+2028, U+2029 and the byte order mark U+FEFF
+	expect_escaped(fx("E2 80 A8").bytes(), "\\xE2\\x80\\xA8");
+	expect_escaped(fx("E2 80 A9").bytes(), "\\xE2\\x80\\xA9");
+	expect_escaped(fx("EF BB BF").bytes(), "\\xEF\\xBB\\xBF");
+	// neighbours that are ordinary text stay: U+2010 hyphen, U+2030, U+20AC euro, U+2060 is a word joiner (escaped too)
+	expect_escaped(fx("E2 80 90 E2 80 B0 E2 82 AC").bytes(), "‐‰€");
+	expect_escaped(fx("E2 81 A0").bytes(), "\\xE2\\x81\\xA0");
+}

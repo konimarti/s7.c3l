@@ -105,8 +105,9 @@ fn bool lower_equals(String s, String word)
 
 // ---- escaping what the PLC sends ----
 
-// Length of the valid UTF-8 sequence at s[i] (0 when invalid). Overlong forms, surrogates, code points above U+10FFFF and
-// the C1 controls U+0080..U+009F (a terminal acts on them) count as invalid.
+// Length of the UTF-8 sequence at s[i] that may be printed as it is (0 otherwise). Overlong forms, surrogates, code points
+// above U+10FFFF, the C1 controls U+0080..U+009F (a terminal acts on them) and the display-spoofing characters named below
+// count as not printable.
 fn usz utf8_sequence_len(String s, usz i)
 {
 	char c = s[i];
@@ -144,6 +145,10 @@ fn usz utf8_sequence_len(String s, usz i)
 	}
 	if (cp < min || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return 0;
 	if (cp >= 0x80 && cp <= 0x9F) return 0;
+	// characters that cannot drive the terminal but can make the output misleading: zero-width and directional marks
+	// (U+200B..U+200F), line and paragraph separators and bidirectional controls (U+2028..U+202E), the word joiner and the
+	// isolates (U+2060..U+2069), and the byte order mark (U+FEFF)
+	if ((cp >= 0x200B && cp <= 0x200F) || (cp >= 0x2028 && cp <= 0x202E) || (cp >= 0x2060 && cp <= 0x2069) || cp == 0xFEFF) return 0;
 	return n;
 }
 

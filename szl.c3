@@ -198,7 +198,8 @@ fn SzlPart? decode_szl_response(S7Header* header)
 	if (header.param[6] != 0x01) return BAD_RESPONSE~; // subfunction: read SZL
 
 	char seq = header.param[7];
-	char last_unit = (header.param[8] != 0 || header.param[9] != 0) ? (char)1 : (char)0;
+	// param[8] is the data unit reference number; only param[9] (last data unit) says that more fragments follow
+	char last_unit = header.param[9] != 0 ? (char)1 : (char)0;
 	ushort param_err = get_be16(header.param, 10)!;
 
 	if (param_err == 0xD401) return NOT_SUPPORTED~;

@@ -284,3 +284,21 @@ fn void test_userdata_jobs_end_with_the_connection() @test
 	assert(c.expect(JOB_FAILED).error == CLOSED);
 	c.finish();
 }
+
+fn void test_final_szl_fragment_with_a_data_unit_reference_is_complete() @test
+{
+	// byte 8 of the parameter is the data unit reference, only byte 9 says that more follows
+	Rig r;
+	r.start(config_480());
+	r.connect_480();
+	r.s.submit_szl(0x001C, 0, at_ms(10))!!;
+	r.s.consume_output(r.s.pending_output().len);
+	Fixture f = with_ref(FX_V53, 2);
+	f.buf[25] = 1;
+	r.s.feed(f.bytes(), at_ms(11))!!;
+	Event e = r.expect(JOB_DONE);
+	assert(e.completion.payload.len == 68);
+	e.completion.free();
+	assert(r.s.pending_output().len == 0 && r.s.state == READY);
+	r.finish();
+}

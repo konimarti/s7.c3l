@@ -671,6 +671,9 @@ fn int fail(fault f)
 	return exit_code_for(f);
 }
 
+// True when a failed query means the connection is gone (the session is no longer ready), not just that the PLC lacks the thing.
+fn bool connection_lost(Client* c) => c.session.state != READY;
+
 fn int cmd_info(Client* c)
 {
 	io::printfn("PDU size: %d", (int)c.pdu_size());
@@ -685,7 +688,9 @@ fn int cmd_info(Client* c)
 	}
 	else
 	{
-		io::printfn("Module: unavailable (%s)", fault_name(@catch(info)));
+		fault f = @catch(info);
+		if (connection_lost(c)) return fail(f);
+		io::printfn("Module: unavailable (%s)", fault_name(f));
 	}
 	CpuState? state = c.cpu_state();
 	if (try s = state)
@@ -694,7 +699,9 @@ fn int cmd_info(Client* c)
 	}
 	else
 	{
-		io::printfn("State: unavailable (%s)", fault_name(@catch(state)));
+		fault f = @catch(state);
+		if (connection_lost(c)) return fail(f);
+		io::printfn("State: unavailable (%s)", fault_name(f));
 	}
 	Dtl? clock = c.read_clock();
 	if (try t = clock)
@@ -703,7 +710,9 @@ fn int cmd_info(Client* c)
 	}
 	else
 	{
-		io::printfn("Clock: unavailable (%s)", fault_name(@catch(clock)));
+		fault f = @catch(clock);
+		if (connection_lost(c)) return fail(f);
+		io::printfn("Clock: unavailable (%s)", fault_name(f));
 	}
 	return EXIT_OK;
 }

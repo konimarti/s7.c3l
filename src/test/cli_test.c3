@@ -345,3 +345,32 @@ fn void test_write_payloads() @test
 	assert(!t.has_leaks());
 	t.free();
 }
+
+// ---- info on a lost connection ----
+
+fn void test_info_fails_with_exit_code_3_when_the_connection_is_lost() @test
+{
+	fake_reset(usz::max);
+	ClientRig r;
+	r.mt.eof_when_exhausted = true;                         // the PLC goes away after the handshake
+	r.handshake(FX_V12);
+	r.open_480();
+	assert(s7tool::cmd_info(&r.c) == s7tool::EXIT_CONNECTION);
+	r.finish();
+}
+
+fn void test_info_stays_ok_when_the_plc_just_does_not_know_a_list() @test
+{
+	fake_reset(usz::max);
+	ClientRig r;
+	r.handshake(FX_V12);
+	Fixture first = with_ref(FX_PEER_SZL_UNAVAILABLE, 2);      // module identification: not provided
+	Fixture second = with_ref(FX_PEER_SZL_UNAVAILABLE, 3);     // CPU state: not provided
+	Fixture third = with_ref(FX_M42, 4);                       // a clock answer that is too short
+	r.mt.reply_bytes(first.bytes(), 3);
+	r.mt.reply_bytes(second.bytes(), 4);
+	r.mt.reply_bytes(third.bytes(), 5);
+	r.open_480();
+	assert(s7tool::cmd_info(&r.c) == s7tool::EXIT_OK);
+	r.finish();
+}

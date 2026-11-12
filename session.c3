@@ -59,8 +59,14 @@ struct Completion
 	RequestId id;
 	Address[] items;           // copy of the request
 	ItemResult[] results;      // one per logical item
-	char[] payload;            // backing storage of the item data
+	char[] payload;            // backing storage of the item data; for an SZL read the reassembled records
 	Allocator allocator;
+	JobKind kind;              // READ, WRITE, SZL or CLOCK
+	ushort szl_id;             // SZL: the answered list
+	ushort szl_index;
+	ushort rec_len;            // SZL: record length and the number of records in `payload`
+	ushort rec_count;
+	Dtl clock;                 // CLOCK: the PLC's time
 }
 
 fn void Completion.free(&self)
@@ -86,6 +92,8 @@ enum JobKind : char
 {
 	READ,
 	WRITE,
+	SZL,
+	CLOCK,
 }
 
 // The job in flight (internal).
@@ -101,6 +109,9 @@ struct Job
 	usz[] starts;              // offset of every item in `payload`
 	char[][] item_data;        // write: per-item views of `payload`
 	usz next_pdu;              // next PDU of the plan to send
+	ushort szl_id;             // SZL jobs: what is asked and the fragments collected so far
+	ushort szl_index;
+	SzlAssembler reassembly;
 	ushort ref;                // pdu_ref of the PDU in flight
 	Slice[MAX_ACTIVE_SLICES] active_slices;   // slices of the PDU in flight (items that already failed are left out)
 	usz active_n;
@@ -114,6 +125,8 @@ fn void Job.release(&self, Allocator allocator)
 	if (self.starts.len > 0) alloc::free(allocator, self.starts.ptr);
 	if (self.item_data.len > 0) alloc::free(allocator, self.item_data.ptr);
 	self.plan.free();
+	self.reassembly.free();
+	self.reassembly = {};
 	self.active = false;
 	self.items = {};
 	self.results = {};
@@ -451,7 +464,12 @@ fn void Session.complete_job(&self)
 		}
 	}
 	Event e = { .kind = JOB_DONE, .id = job.id };
-	e.completion = { job.id, job.items, job.results, job.payload, self.allocator };
+	e.completion.id = job.id;
+	e.completion.items = job.items;
+	e.completion.results = job.results;
+	e.completion.payload = job.payload;
+	e.completion.allocator = self.allocator;
+	e.completion.kind = job.kind;
 	job.plan.free();
 	if (job.starts.len > 0) alloc::free(self.allocator, job.starts.ptr);
 	if (job.item_data.len > 0) alloc::free(self.allocator, job.item_data.ptr);
@@ -466,6 +484,8 @@ fn void? Session.on_job_answer(&self, CotpPdu* cotp, time::Clock now)
 	Job* job = &self.job;
 	S7Header h = decode_s7_header(cotp.payload)!;
 	if (h.pdu_ref != job.ref && !self.cfg.lenient_pdu_ref) return PDU_REF_MISMATCH~;
+	if (job.kind == SZL) return self.on_szl_answer(&h, now);
+	if (job.kind == CLOCK) return self.on_clock_answer(&h);
 	Pdu pdu = { job.active_slices[:job.active_n] };
 	ItemResult[MAX_ACTIVE_SLICES] res;
 	fault failure;
@@ -507,6 +527,141 @@ fn void? Session.on_job_answer(&self, CotpPdu* cotp, time::Clock now)
 		}
 	}
 	self.send_next_pdu(now)!;
+}
+
+// The job failed inside a well-formed frame: report it, keep the session READY.
+fn void Session.reject_job(&self, fault failure)
+{
+	self.job_failed(failure);
+	self.state = READY;
+	self.deadline = (time::Clock)0;
+}
+
+// Sends an SZL request for the job in flight: the first one (`seq` 0) or a continuation echoing `seq`.
+fn void? Session.send_szl_request(&self, char seq, time::Clock now)
+{
+	Job* job = &self.job;
+	job.ref = self.alloc_ref();
+	char[] out = self.outbuf[self.out_len..];
+	usz len;
+	if (seq == 0)
+	{
+		len = encode_szl_request(job.ref, job.szl_id, job.szl_index, 0, out)!;
+	}
+	else
+	{
+		len = encode_szl_continuation_request(job.ref, job.szl_id, job.szl_index, seq, out)!;
+	}
+	self.out_len += len;
+	self.deadline = now.add_duration(self.cfg.response_timeout);
+}
+
+fn void? Session.on_szl_answer(&self, S7Header* h, time::Clock now)
+{
+	Job* job = &self.job;
+	SzlPart? part = decode_szl_response(h);
+	if (catch err = part)
+	{
+		self.reject_job(err);
+		return;
+	}
+	if (catch err = job.reassembly.push(&part))
+	{
+		self.reject_job(err);
+		return;
+	}
+	if (part.more)
+	{
+		// the next fragment: a continuation request inside the same job
+		if (catch err = self.send_szl_request(part.seq, now))
+		{
+			self.reject_job(err);
+		}
+		return;
+	}
+	Event e = { .kind = JOB_DONE, .id = job.id };
+	e.completion.id = job.id;
+	e.completion.allocator = self.allocator;
+	e.completion.kind = SZL;
+	e.completion.szl_id = part.szl_id;
+	e.completion.szl_index = part.index;
+	e.completion.rec_len = part.rec_len;
+	e.completion.rec_count = part.rec_len > 0 ? (ushort)(job.reassembly.buffer.len / part.rec_len) : part.rec_count;
+	e.completion.payload = job.reassembly.buffer;
+	job.reassembly.buffer = {};      // the completion owns the records now
+	job.release(self.allocator);
+	self.state = READY;
+	self.deadline = (time::Clock)0;
+	self.push_event(e);
+}
+
+fn void? Session.on_clock_answer(&self, S7Header* h)
+{
+	Job* job = &self.job;
+	Dtl? time = decode_clock_response(h);
+	if (catch err = time)
+	{
+		self.reject_job(err);
+		return;
+	}
+	Event e = { .kind = JOB_DONE, .id = job.id };
+	e.completion.id = job.id;
+	e.completion.allocator = self.allocator;
+	e.completion.kind = CLOCK;
+	e.completion.clock = time;
+	job.release(self.allocator);
+	self.state = READY;
+	self.deadline = (time::Clock)0;
+	self.push_event(e);
+}
+
+fn void? Session.start_userdata_job(&self, JobKind kind)
+{
+	if (self.state == JOB_IN_FLIGHT) return BUSY~;
+	if (self.state != READY) return NOT_CONNECTED~;
+	self.job = {};
+	self.job.kind = kind;
+	self.job.reassembly = szl_assembler_init(self.cfg.limits, self.allocator);
+	self.next_id++;
+	self.job.id = (RequestId)self.next_id;
+	self.job.active = true;
+	self.state = JOB_IN_FLIGHT;
+}
+
+// Reads the system status list `szl_id` / `index` (module identification 0x0011, component identification 0x001C,
+// CPU state 0x0424). A list that comes in several fragments is collected with continuation requests inside the same
+// job; the completion carries the records in `payload` with `rec_len` and `rec_count`.
+fn RequestId? Session.submit_szl(&self, ushort szl_id, ushort index, time::Clock now)
+{
+	self.start_userdata_job(SZL)!;
+	Job* job = &self.job;
+	job.szl_id = szl_id;
+	job.szl_index = index;
+	if (catch err = self.send_szl_request(0, now))
+	{
+		job.release(self.allocator);
+		self.state = READY;
+		return err~;
+	}
+	return job.id;
+}
+
+// Reads the PLC's clock; the completion carries it in `clock`.
+fn RequestId? Session.submit_read_clock(&self, time::Clock now)
+{
+	self.start_userdata_job(CLOCK)!;
+	Job* job = &self.job;
+	job.ref = self.alloc_ref();
+	usz? n = encode_clock_request(job.ref, self.outbuf[self.out_len..]);
+	if (catch err = n)
+	{
+		job.release(self.allocator);
+		self.state = READY;
+		return err~;
+	}
+	self.out_len += n;
+	self.deadline = now.add_duration(self.cfg.response_timeout);
+	return job.id;
 }
 
 // A read of one or more addresses, cut into PDUs as needed. Returns the id that the completion carries.

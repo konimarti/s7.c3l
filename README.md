@@ -133,7 +133,7 @@ Any type with that method shape, for example a TLS transport, can be passed thro
 `Transport t = (Transport)&other;`. `TcpTransport` waits with `poll` (`WSAPoll` on Windows), so the timeouts are real,
 sets TCP_NODELAY and never raises SIGPIPE (`MSG_NOSIGNAL` on Linux, `SO_NOSIGPIPE` on macOS and the BSDs). A write that
 fails or times out ends the connection: the client never repeats a frame that may have been sent in part. A connection
-that cannot be established is `CONNECT_REFUSED`. Closing the socket is the job of `Client.close`, also after an error.
+that cannot be established is `CONNECT_REFUSED`. `Client.close` closes the transport, also after an error on a connected client; after a failed `open` the transport still belongs to the caller, who closes it.
 
 ## s7tool
 

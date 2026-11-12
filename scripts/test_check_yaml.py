@@ -73,6 +73,15 @@ class CheckYaml(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("dirname", out)
 
+    def test_workflow_input_must_not_be_pasted_into_a_script(self):
+        bad = GOOD.replace("run: c3c test", 'run: |\n          VERSION="${{ github.event.inputs.version }}"\n          c3c test', 1)
+        code, out = run_check(bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn("workflow input", out)
+        # through the environment it is fine
+        fine = GOOD.replace("run: c3c test", 'env:\n          INPUT_VERSION: ${{ github.event.inputs.version }}\n        run: |\n          VERSION="${INPUT_VERSION:-v0.8.6}"\n          c3c test', 1)
+        self.assertEqual(run_check(fine)[0], 0)
+
     def test_the_real_workflow_is_ok(self):
         with open(REAL) as f:
             code, out = run_check(f.read())

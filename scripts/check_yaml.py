@@ -97,6 +97,10 @@ def check(text):
                 problems.append("job %s has no step running '%s'" % (job, step))
     for name, body in blocks.items():
         scripts = run_scripts(body)
+        # an expression such as ${{ github.event.inputs.x }} is pasted into the script before the shell runs it: input from the
+        # dispatch form would become shell code. It has to go through the environment.
+        if re.search(r"\$\{\{[^}]*\binputs\b", scripts):
+            problems.append("job %s pastes a workflow input into a run script; pass it through env: and use the variable" % name)
         # dirname splits on / only: a Windows path has to be converted after the directory is taken, not before
         if re.search(r"dirname\s+\"?\$\(cygpath", scripts):
             problems.append("job %s takes the dirname of a cygpath result; use cygpath -w \"$(dirname ...)\"" % name)

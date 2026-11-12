@@ -152,3 +152,24 @@ fn void test_client_over_a_real_socket() @test
 	(void)l.server.close();
 	(void)l.listener.close();
 }
+
+fn void test_client_gets_closed_when_the_server_goes_away_in_the_middle_of_a_job() @test
+{
+	Loop l;
+	l.open();
+	TrackingAllocator t;
+	t.init(mem);
+	Fixture cc = fx(FX_V6);
+	l.server.write(cc.bytes())!!;
+	Fixture ack = fx(FX_V12);
+	l.server.write(ack.bytes())!!;
+	Client c;
+	c.open(&l.client, config_480(), &t)!!;
+	(void)l.server.close();                                 // the PLC disappears before it answers
+	assert(@catch(c.read_bytes(addr("DB1.DBW2"), &t)) == CLOSED);
+	assert(@catch(c.read_bytes(addr("DB1.DBW2"), &t)) == NOT_CONNECTED);
+	c.close();
+	assert(!t.has_leaks());
+	t.free();
+	(void)l.listener.close();
+}

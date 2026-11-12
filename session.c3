@@ -258,6 +258,7 @@ fn time::Clock Session.next_deadline(&self) => self.deadline;
 // answer would desynchronise the stream); during connect the connect fails.
 fn void Session.on_timeout(&self, time::Clock now)
 {
+	if (self.deadline == (time::Clock)0 || now < self.deadline) return;   // not expired yet: a spurious call changes nothing
 	if (self.state == COTP_SENT || self.state == SETUP_SENT || self.state == JOB_IN_FLIGHT) self.fail(TIMEOUT);
 }
 

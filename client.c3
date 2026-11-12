@@ -115,7 +115,9 @@ fn void Client.report(&self, fault err)
 	time::Clock now = self.clock();
 	if (err == TIMEOUT)
 	{
-		self.session.on_timeout(now);
+		// the transport says time is up: if the clock disagrees (it is slightly behind) the deadline counts as reached
+		time::Clock deadline = self.session.next_deadline();
+		self.session.on_timeout(deadline != (time::Clock)0 && now < deadline ? deadline : now);
 	}
 	else
 	{

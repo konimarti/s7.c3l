@@ -1017,3 +1017,29 @@ fn void test_min_pdu_below_what_the_planner_can_use_is_rejected_at_init() @test
 	assert(!t.has_leaks());
 	t.free();
 }
+
+fn void test_an_early_timeout_report_does_not_kill_a_healthy_session() @test
+{
+	Rig r;
+	r.start(config_480());
+	r.s.connect(at_ms(0))!!;
+	r.s.on_timeout(at_ms(1));                           // the deadline is at 5000 ms
+	assert(r.s.state == COTP_SENT);
+	r.expect_no_event();
+	r.s.on_timeout(at_ms(4999));
+	assert(r.s.state == COTP_SENT);
+	r.s.on_timeout(at_ms(5000));
+	assert(r.s.state == FAILED && r.expect(DISCONNECTED).error == TIMEOUT);
+	r.finish();
+
+	Rig j;
+	j.start(config_480());
+	j.connect_480();
+	j.read("DB1.DBW2", at_ms(100));                     // deadline 5100 ms
+	j.s.on_timeout(at_ms(5099));
+	assert(j.s.state == JOB_IN_FLIGHT);
+	j.expect_no_event();
+	j.s.on_timeout(at_ms(5100));
+	assert(j.expect(JOB_FAILED).error == TIMEOUT && j.s.state == FAILED);
+	j.finish();
+}

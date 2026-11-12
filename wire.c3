@@ -348,6 +348,7 @@ struct SetupParams
 // policy (zero, minimum, clamping to our offer) belongs to the session.
 fn SetupParams? decode_setup_response(S7Header* header)
 {
+	if (header == null) return INVALID_ARGUMENT~;
 	if (header.rosctr != ACK_DATA) return BAD_RESPONSE~;
 	if (header.err_class != 0 || header.err_code != 0) return S7_ERROR~;
 	if (header.param.len < 8) return BAD_RESPONSE~;

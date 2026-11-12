@@ -547,3 +547,8 @@ fn void test_cotp_low_nibble_must_be_zero_for_dt_dr_er() @test
 	Fixture dr_ok = fx("03 00 00 0B 06 80 00 01 00 01 00");
 	assert(decode_cotp(dr_ok.bytes())!!.kind == DR);
 }
+
+fn void test_setup_response_null_header() @test
+{
+	assert(@catch(decode_setup_response(null)) == INVALID_ARGUMENT);
+}

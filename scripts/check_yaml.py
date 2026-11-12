@@ -104,6 +104,19 @@ def check(text):
         # dirname splits on / only: a Windows path has to be converted after the directory is taken, not before
         if re.search(r"dirname\s+\"?\$\(cygpath", scripts):
             problems.append("job %s takes the dirname of a cygpath result; use cygpath -w \"$(dirname ...)\"" % name)
+    if not re.search(r"^permissions:", head, re.M) or not re.search(r"contents:\s*read", head):
+        problems.append("no top level permissions: contents: read (the token should be read only)")
+    for name, body in blocks.items():
+        if "windows" in name:
+            # the default shell on Windows is PowerShell: the help step runs under bash, or names the .exe
+            for step in re.split(r"\n      - ", body):
+                if re.search(r"s7tool(\.exe)? --help", step) and "shell: bash" not in step and "s7tool.exe" not in step:
+                    problems.append("the s7tool --help step of %s needs shell: bash (or the .exe name)" % name)
+        if name == "peer":
+            if "venv" not in body:
+                problems.append("job peer should install python-snap7 into a venv (the system Python refuses pip)")
+            if "exit 1" not in run_scripts(body):
+                problems.append("job peer should fail with exit 1 when the peer does not report READY")
     if not re.search(r"C3_VERSION:\s*v0\.8\.6\b", text):
         problems.append("the compiler version v0.8.6 is not pinned in C3_VERSION")
     return problems

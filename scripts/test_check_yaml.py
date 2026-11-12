@@ -37,7 +37,10 @@ def workflow(jobs, head="on:\n  push:\n  pull_request:\n  workflow_dispatch:\nen
     return head + "jobs:\n" + "".join(jobs)
 
 
-GOOD = workflow([job("build-linux"), job("build-macos"), job("build-windows")])
+GOOD = workflow(
+    [job("build-linux"), job("build-macos"), job("build-windows", "shell: bash\n        ")],
+    head="permissions:\n  contents: read\non:\n  push:\n  pull_request:\n  workflow_dispatch:\nenv:\n  C3_VERSION: v0.8.6\n",
+)
 
 
 class CheckYaml(unittest.TestCase):
@@ -62,7 +65,7 @@ class CheckYaml(unittest.TestCase):
         self.assertEqual(code, 1, out)
 
     def test_the_windows_path_step_converts_after_taking_the_directory(self):
-        good = workflow([job("build-linux"), job("build-macos"), job("build-windows")]) + '''  setup:
+        good = GOOD + '''  setup:
     steps:
       - run: |
           echo "$(cygpath -w "$(dirname "$C3C")")" >> "$GITHUB_PATH"
@@ -81,6 +84,34 @@ class CheckYaml(unittest.TestCase):
         # through the environment it is fine
         fine = GOOD.replace("run: c3c test", 'env:\n          INPUT_VERSION: ${{ github.event.inputs.version }}\n        run: |\n          VERSION="${INPUT_VERSION:-v0.8.6}"\n          c3c test', 1)
         self.assertEqual(run_check(fine)[0], 0)
+
+    def test_the_windows_help_step_needs_bash(self):
+        bad = GOOD.replace("shell: bash\n        ", "")
+        code, out = run_check(bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn("shell: bash", out)
+
+    def test_the_token_is_read_only(self):
+        bad = GOOD.replace("permissions:\n  contents: read\n", "")
+        code, out = run_check(bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn("permissions", out)
+
+    def test_the_peer_job_uses_a_venv_and_fails_when_the_peer_does_not_start(self):
+        peer = """  peer:
+    steps:
+      - run: python3 -m pip install python-snap7
+      - run: |
+          for i in 1 2 3; do
+            if grep -q READY peer.log; then break; fi
+          done
+"""
+        code, out = run_check(GOOD + peer)
+        self.assertEqual(code, 1, out)
+        self.assertIn("venv", out)
+        self.assertIn("exit 1", out)
+        fine = peer.replace("python3 -m pip install", ".venv/bin/pip install").replace("          done\n", "          done\n          grep -q READY peer.log || exit 1\n") + "      - run: python3 -m venv .venv\n"
+        self.assertEqual(run_check(GOOD + fine)[0], 0)
 
     def test_the_real_workflow_is_ok(self):
         with open(REAL) as f:

@@ -1043,3 +1043,26 @@ fn void test_an_early_timeout_report_does_not_kill_a_healthy_session() @test
 	assert(j.expect(JOB_FAILED).error == TIMEOUT && j.s.state == FAILED);
 	j.finish();
 }
+
+fn void test_init_rejects_timeouts_that_are_not_positive() @test
+{
+	TrackingAllocator t;
+	t.init(mem);
+	Session s;
+	SessionConfig cfg = config_480();
+	cfg.response_timeout = time::ms(0);
+	assert(@catch(s.init(cfg, &t)) == INVALID_ARGUMENT);
+	cfg.response_timeout = (time::Duration)-5;
+	assert(@catch(s.init(cfg, &t)) == INVALID_ARGUMENT);
+	cfg = config_480();
+	cfg.connect_timeout = time::ms(0);
+	assert(@catch(s.init(cfg, &t)) == INVALID_ARGUMENT);
+	cfg.connect_timeout = (time::Duration)-1;
+	assert(@catch(s.init(cfg, &t)) == INVALID_ARGUMENT);
+	assert(t.allocation_count() == 0);
+	cfg = config_480();
+	cfg.response_timeout = time::ms(1);
+	assert(@ok(s.init(cfg, &t)));
+	s.free();
+	t.free();
+}

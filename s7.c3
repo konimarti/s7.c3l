@@ -51,7 +51,7 @@ struct Limits
 {
 	ushort min_pdu;       // refuse negotiation below this (default 240? see DESIGN 5.3)
 	ushort max_pdu;       // our offer (default 960)
-	ushort max_items;     // items per Read/Write PDU (default 20)
+	ushort max_items;     // items per Read/Write PDU (default 20); values above 20 are capped to 20 by the planner
 	uint   max_frame;     // reject TPKT length above this (default 8192)
 	uint   max_request_bytes; // cap on one logical request (default 1 MiB)
 	ushort max_szl_fragments; // continuation requests per SZL read (default 64)

@@ -17,8 +17,8 @@ const usz S7_ACK_HEADER_LEN = 12;
 const usz ITEM_PARAM_BASE = 2;             // function code and item count
 const usz DATA_ITEM_OVERHEAD = 4;          // return code or reserved byte, transport size, length (2)
 const usz MIN_PLAN_PDU_SIZE = 30;          // room for one 2-byte chunk of a write
-const usz MAX_ITEMS_PER_PDU = 255;
-const usz ITEM_CAP_PER_PDU = 20;           // the conservative item limit of one request, which PLCs accept         // the item count is one byte
+const usz MAX_ITEMS_PER_PDU = 255;         // the item count of a request is one byte: the hard limit of the format
+const usz ITEM_CAP_PER_PDU = 20;           // the conservative limit the planner applies, which PLCs accept
 
 // Result of one item of a response. `status` is empty on success; `raw_code` is the return code as received
 // (0xFF = success); `data` is a slice of the received frame (empty for a failed item and for writes).

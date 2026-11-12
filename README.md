@@ -52,6 +52,23 @@ fn void? read_a_word(Transport transport)
 `read`, `read_bytes`, `read_value`, `write` and `write_bytes` (the latter two need `allow_write`), `read_szl`,
 `cpu_info`, `cpu_state` and `read_clock` return the PLC's answer or a fault.
 
+## s7tool
+
+`c3c build s7tool` builds a small command line tool (`build/s7tool --help` lists everything):
+
+```sh
+s7tool --host 192.168.0.10 info
+s7tool --host 192.168.0.10 read DB1.DBW2 --type INT
+s7tool --host 192.168.0.10 dump DB1.DBB0 16
+s7tool --host 192.168.0.10 write DB1.DBW2 515 --type INT --allow-write
+```
+
+`--model s7-300|s7-400|s7-1200|s7-1500|s7-200|logo` presets rack and slot (or the raw TSAPs of an S7-200 and a LOGO!);
+`--rack`, `--slot` and `--tsap LOCAL:REMOTE` (hex) override it. `write` is refused (exit code 2) unless `--allow-write` is
+given, and that check happens before any connection is made. Exit codes: 0 ok, 1 usage, 2 write refused, 3 connection or
+protocol failure, 4 the PLC refused or lacks the object (`ACCESS_DENIED` prints a PUT/GET hint). Everything the PLC sends as
+text is printed with control characters and invalid UTF-8 shown as `\xNN`.
+
 ## TCP
 
 `tcp_connect(host, port = 102, timeout)` returns a `TcpTransport` for the `Client`: reads and writes wait with `poll`

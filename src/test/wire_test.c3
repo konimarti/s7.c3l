@@ -513,3 +513,19 @@ fn void test_encode_dt_header_rejects_lengths_that_wrap() @test
 	assert(@catch(encode_dt_header(out[..], 0xFFFF - 7)) == BUFFER_TOO_SMALL);
 	assert(@catch(encode_dt_header(out[..], 0xFFFF - 6)) == INVALID_ARGUMENT);
 }
+
+fn void test_cotp_length_indicator_255_is_reserved() @test
+{
+	// TPKT length 260, LI 255, a CC with class 0 and one unknown parameter that fills the rest of the TPDU
+	char[260] f;
+	f[0] = 3;
+	f[2] = 0x01;
+	f[3] = 0x04;
+	f[4] = 0xFF;
+	f[5] = 0xD0;
+	f[7] = 1;
+	f[9] = 1;
+	f[11] = 0xED;
+	f[12] = 247;
+	assert(@catch(decode_cotp(f[..])) == BAD_COTP);
+}

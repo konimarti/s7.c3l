@@ -129,7 +129,7 @@ fn CotpPdu? decode_cotp(char[] frame)
 	if (total < frame.len) return BAD_TPKT~;
 
 	usz li = frame[4];
-	if (li == 0 || 5 + li > total) return BAD_COTP~;
+	if (li == 0 || li == 255 || 5 + li > total) return BAD_COTP~;
 	char code = frame[5];
 	CotpPdu pdu;
 	usz end = 5 + li;   // one past the last byte of the TPDU header

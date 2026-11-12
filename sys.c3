@@ -57,19 +57,33 @@ $if env::DARWIN || env::BSD_FAMILY:
 $endif
 }
 
-// One send of as much of `data` as the socket takes, without SIGPIPE; returns the bytes sent. A failure (a reset or
-// closed connection) is CLOSED.
+// EAGAIN/EWOULDBLOCK and EINTR: nothing was sent, wait again.
+const int EINTR_CODE = 4;
+const int EAGAIN_LINUX = 11;
+const int EAGAIN_BSD = 35;               // macOS and the BSDs
+const CInt MSG_DONTWAIT_BSD = 0x80;      // macOS and the BSDs
+
+// One send of as much of `data` as the socket takes without blocking and without SIGPIPE; returns the bytes sent, 0 when
+// the socket had no room after all (the caller waits again, so a stalled peer cannot hold the write past its bound). A
+// failure (a reset or closed connection) is CLOSED. On Windows the send has no per-call non-blocking flag and may block.
 fn usz? send_nosignal(TcpSocket* socket, char[] data)
 {
 $if env::WIN32:
 	sz n = libc::send(socket.sock, data.ptr, (int)data.len, 0);
 $else
 $if env::LINUX:
-	sz n = libc::send(socket.sock, data.ptr, (usz)data.len, os::MSG_NOSIGNAL);
+	sz n = libc::send(socket.sock, data.ptr, (usz)data.len, os::MSG_NOSIGNAL | os::MSG_DONTWAIT);
 $else
-	sz n = libc::send(socket.sock, data.ptr, (usz)data.len, 0);
+	sz n = libc::send(socket.sock, data.ptr, (usz)data.len, MSG_DONTWAIT_BSD);
 $endif
 $endif
-	if (n < 0) return s7::CLOSED~;
+	if (n < 0)
+	{
+$if !env::WIN32:
+		int code = (int)libc::errno();
+		if (code == EINTR_CODE || code == EAGAIN_LINUX || code == EAGAIN_BSD) return 0;
+$endif
+		return s7::CLOSED~;
+	}
 	return (usz)n;
 }

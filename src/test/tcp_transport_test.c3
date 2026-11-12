@@ -173,3 +173,15 @@ fn void test_client_gets_closed_when_the_server_goes_away_in_the_middle_of_a_job
 	t.free();
 	(void)l.listener.close();
 }
+
+fn void test_tcp_write_to_a_stalled_peer_times_out() @test
+{
+	// the server never reads: once the socket buffers are full the write must give up at its bound, not block
+	Loop l;
+	l.open();
+	usz size = 32 * 1024 * 1024;
+	char[] big = alloc::new_array(mem, char, (sz)size)[:size];
+	defer alloc::free(mem, big.ptr);
+	assert(@catch(l.client.write(big, time::ms(200))) == TIMEOUT);
+	l.finish();
+}

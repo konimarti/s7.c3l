@@ -7,6 +7,10 @@
 		"s7tool": {
 			"type": "executable",
 			"sources": [ "example/**" ]
+		},
+		"peercheck": {
+			"type": "executable",
+			"sources": [ "src/peercheck/**" ]
 		}
 	}
 }

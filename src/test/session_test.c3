@@ -1000,3 +1000,20 @@ fn void test_a_job_is_refused_while_a_completion_is_still_queued() @test
 	}
 	r.finish();
 }
+
+fn void test_min_pdu_below_what_the_planner_can_use_is_rejected_at_init() @test
+{
+	TrackingAllocator t;
+	t.init(mem);
+	Session s;
+	SessionConfig cfg = config_480();
+	cfg.limits.min_pdu = 10;                        // a peer answer of 10 would connect and then fail every job
+	assert(@catch(s.init(cfg, &t)) == INVALID_ARGUMENT);
+	cfg.limits.min_pdu = 29;
+	assert(@catch(s.init(cfg, &t)) == INVALID_ARGUMENT);
+	cfg.limits.min_pdu = 30;
+	assert(@ok(s.init(cfg, &t)));
+	s.free();
+	assert(!t.has_leaks());
+	t.free();
+}

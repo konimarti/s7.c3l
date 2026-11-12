@@ -166,7 +166,7 @@ fn void? Session.init(&self, SessionConfig cfg, Allocator allocator)
 {
 	Limits l = cfg.limits;
 	if ((uint)l.max_pdu + 7 > l.max_frame || l.min_pdu > l.max_pdu || l.max_items == 0) return INVALID_ARGUMENT~;
-	if (l.max_pdu < MIN_PLAN_PDU_SIZE) return INVALID_ARGUMENT~;
+	if (l.max_pdu < MIN_PLAN_PDU_SIZE || l.min_pdu < MIN_PLAN_PDU_SIZE) return INVALID_ARGUMENT~;   // the planner needs 30 bytes
 	*self = {};
 	self.cfg = cfg;
 	self.allocator = allocator;

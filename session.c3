@@ -569,6 +569,12 @@ fn void? Session.on_szl_answer(&self, S7Header* h, time::Clock now)
 		self.reject_job(err);
 		return;
 	}
+	if (part.szl_id != job.szl_id)
+	{
+		// the PLC answered another list than the one asked for (the index is not compared: PLCs may echo another one)
+		self.reject_job(BAD_RESPONSE);
+		return;
+	}
 	if (catch err = job.reassembly.push(&part))
 	{
 		self.reject_job(err);

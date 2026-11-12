@@ -302,3 +302,29 @@ fn void test_final_szl_fragment_with_a_data_unit_reference_is_complete() @test
 	assert(r.s.pending_output().len == 0 && r.s.state == READY);
 	r.finish();
 }
+
+fn void test_an_answer_for_another_szl_list_is_rejected() @test
+{
+	Rig r;
+	r.start(config_480());
+	r.connect_480();
+	r.s.submit_szl(0x0424, 0, at_ms(10))!!;
+	r.s.consume_output(r.s.pending_output().len);
+	r.feed_ref(FX_V53, 2, at_ms(11));                     // the answer is list 0x001C
+	assert(r.expect(JOB_FAILED).error == BAD_RESPONSE);
+	assert(r.s.state == READY);
+	r.finish();
+	// the same for a later fragment of a fragmented list
+	Rig q;
+	q.start(config_480());
+	q.connect_480();
+	q.s.submit_szl(0x001C, 0, at_ms(10))!!;
+	q.s.consume_output(q.s.pending_output().len);
+	q.feed_ref(FX_V53_FRAG1, 2, at_ms(11));
+	q.s.consume_output(q.s.pending_output().len);
+	Fixture other = with_ref(FX_V53_FRAG2, 3);
+	other.buf[7 + 10 + 12 + 4 + 1] = 0x24;                // list id 0x0024 instead of 0x001C
+	q.s.feed(other.bytes(), at_ms(12))!!;
+	assert(q.expect(JOB_FAILED).error == BAD_RESPONSE);
+	q.finish();
+}

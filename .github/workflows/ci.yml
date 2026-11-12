@@ -76,7 +76,7 @@ jobs:
           curl -fsSL -o /tmp/c3.zip "https://github.com/c3lang/c3c/releases/download/${VERSION}/c3-windows.zip"
           unzip -q /tmp/c3.zip -d /tmp/c3dl
           C3C=$(find /tmp/c3dl -type f -name c3c.exe | head -1)
-          echo "$(dirname "$(cygpath -w "$C3C")")" >> "$GITHUB_PATH"
+          echo "$(cygpath -w "$(dirname "$C3C")")" >> "$GITHUB_PATH"
 
       - name: Run unit tests
         run: c3c test

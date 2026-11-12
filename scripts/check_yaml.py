@@ -95,6 +95,11 @@ def check(text):
         for step, pattern in REQUIRED_STEPS.items():
             if not re.search(pattern, scripts, re.M):
                 problems.append("job %s has no step running '%s'" % (job, step))
+    for name, body in blocks.items():
+        scripts = run_scripts(body)
+        # dirname splits on / only: a Windows path has to be converted after the directory is taken, not before
+        if re.search(r"dirname\s+\"?\$\(cygpath", scripts):
+            problems.append("job %s takes the dirname of a cygpath result; use cygpath -w \"$(dirname ...)\"" % name)
     if not re.search(r"C3_VERSION:\s*v0\.8\.6\b", text):
         problems.append("the compiler version v0.8.6 is not pinned in C3_VERSION")
     return problems

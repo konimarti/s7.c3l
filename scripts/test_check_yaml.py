@@ -61,6 +61,18 @@ class CheckYaml(unittest.TestCase):
         code, out = run_check(text)
         self.assertEqual(code, 1, out)
 
+    def test_the_windows_path_step_converts_after_taking_the_directory(self):
+        good = workflow([job("build-linux"), job("build-macos"), job("build-windows")]) + '''  setup:
+    steps:
+      - run: |
+          echo "$(cygpath -w "$(dirname "$C3C")")" >> "$GITHUB_PATH"
+'''
+        self.assertEqual(run_check(good)[0], 0)
+        bad = good.replace('echo "$(cygpath -w "$(dirname "$C3C")")"', 'echo "$(dirname "$(cygpath -w "$C3C")")"')
+        code, out = run_check(bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn("dirname", out)
+
     def test_the_real_workflow_is_ok(self):
         with open(REAL) as f:
             code, out = run_check(f.read())

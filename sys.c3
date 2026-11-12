@@ -24,10 +24,11 @@ fn void? wait_for(NativeSocket sock, PollSubscribe events, time::Duration timeou
 	Poll[1] polls;
 	polls[0].socket = sock;
 	polls[0].events = events;
-	// A wait interrupted by a signal is repeated with the time that is left; any other failure ends the connection.
+	// A wait interrupted by a signal is repeated with the time that is left, as often as it takes (for a negative timeout
+	// without end); any other failure ends the connection.
 	time::Clock start = time::clock::now();
 	long wait_ms = ms;
-	for (int attempt = 0; attempt < 3; attempt++)
+	while (true)
 	{
 		ulong? ready = net::poll_ms(polls[..], wait_ms);
 		if (catch err = ready)
@@ -49,7 +50,6 @@ $endif
 		if (ready == 0) return s7::TIMEOUT~;
 		return;
 	}
-	return s7::CLOSED~;
 }
 
 fn void? wait_readable(TcpSocket* socket, time::Duration timeout) => wait_for(socket.sock, PollSubscribe.ANY_READ, timeout);

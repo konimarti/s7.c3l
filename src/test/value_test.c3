@@ -132,7 +132,7 @@ fn void test_string_latin1_to_utf8() @test
 {
 	TrackingAllocator t;
 	t.init(mem);
-	Value v = dec(STRING, "04 03 41 E9 FF", &t);
+	Value v = dec(STRING, "04 03 41 E9 FF 00", &t);
 	assert(v.str == "Aéÿ");
 	char[16] out;
 	assert(encode_value(&v, out[..], 4)!! == 6);
@@ -168,15 +168,15 @@ fn void test_wstring_surrogates() @test
 {
 	TrackingAllocator t;
 	t.init(mem);
-	Value v = dec(WSTRING, "00 04 00 02 D8 3D DE 00", &t);
+	Value v = dec(WSTRING, "00 04 00 02 D8 3D DE 00 00 00 00 00", &t);
 	assert(v.str == "\U0001F600");
 	expect_encodes_to(&v, 4, "00 04 00 02 D8 3D DE 00 00 00 00 00");
 	v.free(&t);
 	assert(!t.has_leaks());
 	t.free();
-	assert(dec_fault(WSTRING, "00 04 00 01 D8 3D") == INVALID_VALUE);        // lone high surrogate
-	assert(dec_fault(WSTRING, "00 04 00 01 DE 00") == INVALID_VALUE);        // lone low surrogate
-	assert(dec_fault(WSTRING, "00 04 00 02 D8 3D 00 41") == INVALID_VALUE);  // high surrogate without low
+	assert(dec_fault(WSTRING, "00 04 00 01 D8 3D 00 00 00 00 00 00") == INVALID_VALUE);        // lone high surrogate
+	assert(dec_fault(WSTRING, "00 04 00 01 DE 00 00 00 00 00 00 00") == INVALID_VALUE);        // lone low surrogate
+	assert(dec_fault(WSTRING, "00 04 00 02 D8 3D 00 41 00 00 00 00") == INVALID_VALUE);  // high surrogate without low
 }
 
 fn void test_vt16_char() @test
@@ -648,4 +648,22 @@ fn void test_integer_literals_that_overflow_are_rejected() @test
 	assert(@catch(parse_value(DWORD, "0xFFFFFFFFFFFFFFFFFF", mem)) == INVALID_VALUE);
 	assert(parse_value(DWORD, "0xFFFFFFFF", mem)!!.u == 4294967295);
 	assert(parse_value(DINT, "-2147483648", mem)!!.i == -2147483648);
+}
+
+fn void test_strings_need_their_declared_capacity() @test
+{
+	// the header declares 12 bytes (max 10), only 4 are there
+	assert(dec_fault(STRING, "0A 02 41 42") == VALUE_TOO_SHORT);
+	assert(dec_fault(STRING, "0A 00") == VALUE_TOO_SHORT);
+	assert(dec_fault(STRING, "0A 02 41 42 00 00 00 00 00 00 00") == VALUE_TOO_SHORT);   // one byte missing
+	Value ok = dec(STRING, "0A 02 41 42 00 00 00 00 00 00 00 00", mem);
+	assert(ok.str == "AB");
+	ok.free(mem);
+	// WSTRING max 5 declares 4 + 10 bytes
+	assert(dec_fault(WSTRING, "00 05 00 00") == VALUE_TOO_SHORT);
+	assert(dec_fault(WSTRING, "00 05 00 02 00 41 00 42") == VALUE_TOO_SHORT);
+	assert(dec_fault(WSTRING, "00 05 00 02 00 41 00 42 00 00 00 00 00") == VALUE_TOO_SHORT);   // one byte missing
+	Value w = dec(WSTRING, "00 05 00 02 00 41 00 42 00 00 00 00 00 00", mem);
+	assert(w.str == "AB");
+	w.free(mem);
 }

@@ -284,7 +284,7 @@ fn Value? decode_string(char[] bytes, Allocator allocator)
 	usz max = bytes[0];
 	usz cur = bytes[1];
 	if (cur > max) return INVALID_VALUE~;
-	if (bytes.len < 2 + cur) return VALUE_TOO_SHORT~;
+	if (bytes.len < 2 + max) return VALUE_TOO_SHORT~;   // the header declares the whole object
 	Value v = { .kind = STRING };
 	v.str = latin1_to_utf8(bytes[2:cur], allocator);
 	return v;
@@ -296,7 +296,7 @@ fn Value? decode_wstring(char[] bytes, Allocator allocator)
 	usz max = (usz)get_be16(bytes, 0)!;
 	usz cur = (usz)get_be16(bytes, 2)!;
 	if (cur > max) return INVALID_VALUE~;
-	if (bytes.len < 4 + 2 * cur) return VALUE_TOO_SHORT~;
+	if (bytes.len < 4 + 2 * max) return VALUE_TOO_SHORT~;   // the header declares the whole object
 	Value v = { .kind = WSTRING };
 	v.str = utf16be_to_utf8(bytes[4:2 * cur], cur, allocator)!;
 	return v;
@@ -354,7 +354,8 @@ fn uint real_bits(Value* value)
 	return bitcast((float)value.f, uint);
 }
 
-// Decode `bytes` (big-endian) as `kind`. Extra bytes after a fixed-size value are ignored. A short buffer is
+// Decode `bytes` (big-endian) as `kind`. Extra bytes after a value are ignored; STRING and WSTRING need the
+// whole object their header declares (2 + max, 4 + 2 * max bytes). A short buffer is
 // VALUE_TOO_SHORT, an impossible content (BCD nibble, date out of range, string length) is INVALID_VALUE.
 // BOOL is bit 0 of bytes[0]; use decode_bool for another bit.
 fn Value? decode_value(ValueKind kind, char[] bytes, Allocator allocator)

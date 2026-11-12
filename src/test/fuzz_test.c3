@@ -126,6 +126,23 @@ fn void mutate(FuzzRng* rng, Mutant* m)
 		default:
 			m.bytes[rng.below(m.len)] = (char)rng.next();
 	}
+	// Half of the time the S7 parameter and data lengths are made consistent with the new frame size, so that a structurally broken
+	// mutant (cut, extended or shuffled item and record lists) is not dropped at the header but reaches the item, record and clock
+	// parsers with a header that is right about the bytes it describes.
+	if (m.len >= 17 && rng.below(2) == 0)
+	{
+		usz header = (m.bytes[8] == 2 || m.bytes[8] == 3) ? 12 : 10;
+		usz plen = ((usz)m.bytes[13] << 8) | m.bytes[14];
+		if (7 + header + plen > m.len) plen = m.len > 7 + header ? rng.below(m.len - 7 - header + 1) : 0;
+		if (7 + header <= m.len)
+		{
+			usz dlen = m.len - 7 - header - plen;
+			m.bytes[13] = (char)(plen >> 8);
+			m.bytes[14] = (char)plen;
+			m.bytes[15] = (char)(dlen >> 8);
+			m.bytes[16] = (char)dlen;
+		}
+	}
 	// half of the time the TPKT length is made right again so that the mutant gets past the framing and into the parsers
 	if (m.len >= 4 && rng.below(2) == 0)
 	{

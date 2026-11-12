@@ -206,8 +206,8 @@ fn SzlPart? decode_szl_response(S7Header* header)
 	if (param_err != 0) return NOT_SUPPORTED~;
 
 	if (header.data.len < 4) return BAD_RESPONSE~;
-	if ((char)header.data[0] == 0x0A) return NOT_SUPPORTED~;
-	if ((char)header.data[0] != 0xFF) return BAD_RESPONSE~;
+	// any data return code other than success means the list is not provided (0x0A on a derived answer, 0x81 on the peer)
+	if ((char)header.data[0] != 0xFF) return NOT_SUPPORTED~;
 	if ((char)header.data[1] != 0x09) return BAD_RESPONSE~;
 
 	ushort data_len = get_be16(header.data, 2)!;

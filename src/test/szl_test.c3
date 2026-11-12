@@ -340,3 +340,18 @@ fn void test_extra_max_request_bytes() @test
 	asmb.push(&p1)!!; // 34 bytes <= 50 bytes: OK
 	assert(@catch(asmb.push(&p2)) == INVALID_ARGUMENT); // 68 bytes > 50 bytes
 }
+
+// Captured from the python-snap7 server on 2026-11-12: the answer to a list it does not have carries the data return code
+// 0x81 (and no parameter error), unlike the 0x0A / D401 combination of a derived answer.
+const String FX_PEER_SZL_UNAVAILABLE = "03 00 00 21 02 F0 80 32 07 00 00 00 02 00 0C 00 04 00 01 12 08 12 84 01 00 00 00 00 00 81 00 00 00";
+
+fn void test_a_data_return_code_other_than_success_means_not_supported() @test
+{
+	Fixture f = fx(FX_PEER_SZL_UNAVAILABLE);
+	S7Header h = s7_of(&f)!!;
+	assert(@catch(decode_szl_response(&h)) == NOT_SUPPORTED);
+	// a short data unit is still malformed
+	Fixture g = fx("03 00 00 1F 02 F0 80 32 07 00 00 00 02 00 0C 00 02 00 01 12 08 12 84 01 00 00 00 00 00 81 00");
+	S7Header h2 = s7_of(&g)!!;
+	assert(@catch(decode_szl_response(&h2)) == BAD_RESPONSE);
+}

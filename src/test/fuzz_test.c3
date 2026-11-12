@@ -162,13 +162,17 @@ struct FuzzRig
 	bool keep_events;          // the test reads the events itself
 }
 
-fn SessionConfig fuzz_config()
+// `flags`: bit 0 lenient reserved byte, bit 1 lenient pdu_ref, bit 2 strict DST-REF (the default is lenient).
+fn SessionConfig fuzz_config(usz flags)
 {
 	SessionConfig cfg = default_config(tsaps_from_rack_slot(PG, 0, 2)!!);
 	cfg.limits.max_pdu = 480;
 	cfg.limits.max_frame = FUZZ_MAX_FRAME;
 	cfg.limits.max_request_bytes = FUZZ_MAX_REQUEST;
 	cfg.allow_write = true;
+	cfg.lenient_reserved = (flags & 1) != 0;
+	cfg.lenient_pdu_ref = (flags & 2) != 0;
+	cfg.lenient_dst_ref = (flags & 4) == 0;
 	return cfg;
 }
 
@@ -192,10 +196,10 @@ fn void FuzzRig.feed_fixed(&self, String hex)
 
 // Brings a fresh session into scenario `n`: 0 connecting, 1 waiting for the setup answer, 2 idle, 3 read in flight, 4 write in
 // flight, 5 a multi-PDU read at pdu 240, 6 SZL, 7 clock, 8 a read with two items.
-fn void FuzzRig.start(&self, usz n)
+fn void FuzzRig.start(&self, usz n, usz flags = 0)
 {
 	self.alloc.inner.init(mem);
-	self.s.init(fuzz_config(), &self.alloc)!!;
+	self.s.init(fuzz_config(flags), &self.alloc)!!;
 	self.s.connect(at_ms(0))!!;
 	self.s.consume_output(self.s.pending_output().len);
 	if (n == 0) return;
@@ -245,12 +249,45 @@ fn void FuzzRig.expect_down(&self)
 	assert(@catch(self.s.feed(x[..], at_ms(9))) == NOT_CONNECTED);
 }
 
-// Feeds `bytes` in chunks of random size.
-fn void FuzzRig.feed_chunks(&self, FuzzRng* rng, char[] bytes)
+// One of the other calls an adapter makes, in the middle of a stream.
+fn void FuzzRig.interject(&self, FuzzRng* rng)
+{
+	time::Clock[3] times = { at_ms(0), at_ms(5001), at_ms(1000000) };
+	Address[1] items = { parse_address("DB1.DBW2")!! };
+	switch (rng.below(6))
+	{
+		case 0:
+			self.s.on_timeout(times[rng.below(3)]);
+		case 1:
+			self.s.on_closed(CLOSED, at_ms(5));
+		case 2:
+			self.s.close(at_ms(5));
+		case 3:
+			self.s.consume_output(rng.below(self.s.out_len + 1));
+		case 4:
+			(void)@catch(self.s.submit_read(items[..], at_ms(5)));
+		default:
+			(void)@catch(self.s.submit_szl(0x0011, 0, at_ms(5)));
+	}
+	self.check();
+	self.take_events();
+}
+
+// Feeds `bytes` in chunks of random size; with `interleave` other calls are made between the chunks.
+fn void FuzzRig.feed_chunks(&self, FuzzRng* rng, char[] bytes, bool interleave = false)
 {
 	usz at = 0;
 	while (at < bytes.len)
 	{
+		if (interleave && rng.below(6) == 0)
+		{
+			self.interject(rng);
+			if (self.s.state == FAILED || self.s.state == CLOSED)
+			{
+				self.expect_down();
+				return;
+			}
+		}
 		usz n = 1 + rng.below(bytes.len - at);
 		if (rng.below(3) == 0) n = 1 + rng.below(4);
 		if (n > bytes.len - at) n = bytes.len - at;
@@ -291,8 +328,8 @@ fn void test_fuzz_mutated_fixtures_in_every_session_state() @test
 		usz changes = 1 + rng.below(3);
 		for (usz c = 0; c < changes; c++) mutate(&rng, &m);
 		FuzzRig r;
-		r.start(i % SCENARIOS);
-		r.feed_chunks(&rng, m.bytes[:m.len]);
+		r.start(i % SCENARIOS, rng.below(8));
+		r.feed_chunks(&rng, m.bytes[:m.len], rng.below(4) == 0);
 		if (r.s.state == FAILED) failed++;
 		if (r.s.state == CLOSED) closed++;
 		if (r.s.state == READY) ready++;

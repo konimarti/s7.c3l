@@ -26,6 +26,32 @@ says when to call `on_timeout`; `on_closed` reports end of stream; `close` queue
 flight at a time. `submit_write` is refused with `WRITE_NOT_ALLOWED` unless `SessionConfig.allow_write` is set.
 The strictness switches `lenient_reserved`, `lenient_pdu_ref` and `lenient_dst_ref` default to strict, strict, lenient.
 
+## Client
+
+`Client` runs a `Session` over a `Transport` (a blocking byte stream: `read`, `write`, `close`, each with a
+`Duration` timeout; a negative timeout means no limit, zero polls once). Any type with that method shape can be
+passed through an explicit cast, for example `(Transport)&tls`. The client reports missed deadlines to the session
+instead of starting a read with no time left.
+
+```c3
+module app;
+import s7;
+
+fn void? read_a_word(Transport transport)
+{
+	s7::SessionConfig cfg = s7::default_config(s7::tsaps_from_rack_slot(PG, 0, 2)!);
+	s7::Client client;
+	client.open(transport, cfg, mem)!;
+	defer client.close();
+	char[] bytes = client.read_bytes(s7::parse_address("DB1.DBW2")!, mem)!;
+	defer free(bytes.ptr);
+	assert(bytes.len == 2);
+}
+```
+
+`read`, `read_bytes`, `read_value`, `write` and `write_bytes` (the latter two need `allow_write`), `read_szl`,
+`cpu_info`, `cpu_state` and `read_clock` return the PLC's answer or a fault.
+
 ## Known unverified items
 
 - Timers and counters are written as octet strings (transport size 0x09); the receiving side is unverified.

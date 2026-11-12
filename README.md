@@ -7,3 +7,8 @@ S7 value types. Sans-IO core with a blocking TCP adapter. Writes to a PLC are re
 allowed.
 
 Requires c3c v0.8.6 or newer. Licence: MIT.
+
+## Known unverified items
+
+- Continuation SZL request layout (F13): multi-fragment continuation requests echo the sequence number in the parameter; unverified against hardware.
+

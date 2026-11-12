@@ -246,8 +246,8 @@ fn usz? encode_dr(ushort dst_ref, ushort src_ref, char[] out)
 // Returns the total frame length.
 fn usz? encode_dt_header(char[] out, usz s7_len)
 {
+	if (s7_len > 0xFFFF - DT_HEADER_LEN) return INVALID_ARGUMENT~;
 	usz total = DT_HEADER_LEN + s7_len;
-	if (total > 0xFFFF) return INVALID_ARGUMENT~;
 	if (out.len < total) return BUFFER_TOO_SMALL~;
 	out[0] = 3;
 	out[1] = 0;

@@ -504,3 +504,12 @@ fn void test_be_helpers_reject_offsets_that_wrap() @test
 	assert(get_be16(b[:2], 0)!! == 0);
 	assert(get_be32(b[:4], 0)!! == 0);
 }
+
+fn void test_encode_dt_header_rejects_lengths_that_wrap() @test
+{
+	char[64] out;
+	assert(@catch(encode_dt_header(out[..], usz::max)) == INVALID_ARGUMENT);
+	assert(@catch(encode_dt_header(out[..], usz::max - 6)) == INVALID_ARGUMENT);
+	assert(@catch(encode_dt_header(out[..], 0xFFFF - 7)) == BUFFER_TOO_SMALL);
+	assert(@catch(encode_dt_header(out[..], 0xFFFF - 6)) == INVALID_ARGUMENT);
+}

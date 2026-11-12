@@ -47,6 +47,7 @@ struct Options
 	ValueKind kind;
 	bool allow_write;
 	bool help;
+	bool version;
 	Command command;
 	String address;
 	String value;
@@ -357,6 +358,10 @@ fn void? parse_options(String[] args, Options* o)
 		{
 			o.help = true;
 		}
+		else if (a == "--version")
+		{
+			o.version = true;
+		}
 		else if (a == "--allow-write")
 		{
 			o.allow_write = true;
@@ -374,7 +379,7 @@ fn void? parse_options(String[] args, Options* o)
 			slots[n++] = a;
 		}
 	}
-	if (o.help) return;
+	if (o.help || o.version) return;
 	if (n == 0) return usage(o, "no command given (info, read, write or dump)");
 	String command = slots[0];
 	usz expected;
@@ -610,6 +615,7 @@ fn void print_help()
 	io::printn("  --type T             BOOL BYTE WORD DWORD INT DINT REAL LREAL CHAR STRING WSTRING DATE TIME TOD DATE_AND_TIME DTL S5TIME COUNTER");
 	io::printn("  --allow-write        let the write command write");
 	io::printn("  --help               this text");
+	io::printn("  --version            print the version");
 	io::printn("");
 	io::printn("addresses: DB1.DBX0.3 DB1.DBW2 DB10.DBB0[16] MW20 I0.1 QB4 PIW4 T5 C3");
 	io::printn("exit codes: 0 ok, 1 usage, 2 write refused, 3 connection or protocol failure, 4 the PLC refused");
@@ -813,6 +819,11 @@ fn int run(String[] args)
 	{
 		io::eprintfn("s7tool: %s (try --help)", o.error);
 		return EXIT_USAGE;
+	}
+	if (o.version)
+	{
+		io::printfn("s7tool %s", s7::VERSION);
+		return EXIT_OK;
 	}
 	if (o.help)
 	{

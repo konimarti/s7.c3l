@@ -1,5 +1,8 @@
 module s7;
 
+// The version of the library: kept equal to "version" in project.json by tools/bump_version.c3 and checked by a test.
+const String VERSION = "0.1.0";
+
 // ---- Error model (DESIGN.md section 6). One flat fault list, grouped by layer. ----
 
 // Framing / protocol violations by the peer (malformed or unexpected bytes).

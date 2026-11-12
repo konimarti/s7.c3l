@@ -445,3 +445,17 @@ fn void test_a_transport_that_returns_nothing_or_too_much_ends_the_connection() 
 	assert(@catch(b.open_with(config_480())) == CLOSED);
 	b.alloc.free();
 }
+
+fn void test_a_write_that_times_out_after_a_partial_send_is_not_retried() @test
+{
+	fake_reset(usz::max);
+	ClientRig r;
+	r.mt.partial_write_bytes = 3;                                    // 3 bytes of the Connection Request go out, then TIMEOUT
+	r.handshake(FX_V12);
+	assert(@catch(r.open_with(config_480())) == TIMEOUT);
+	// the frame must not be sent again from its start: the PLC would see a corrupted stream
+	assert(r.mt.written_len == 3 && r.mt.write_calls == 1);
+	Fixture prefix = fx("03 00 00");
+	assert(same_bytes(r.mt.written[:3], prefix.bytes()));
+	r.alloc.free();
+}

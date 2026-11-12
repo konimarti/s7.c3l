@@ -104,7 +104,9 @@ fn void Client.flush(&self)
 	}
 	if (catch err = self.transport.write(out, timeout))
 	{
-		self.report(err);
+		// a write that failed, a timeout included, may have sent part of the frame: the position in the stream is unknown, so
+		// it is never retried (only reads can be)
+		self.session.on_closed(err, self.clock());
 		return;
 	}
 	self.session.consume_output(out.len);

@@ -26,6 +26,7 @@ struct MemTransport (Transport)
 	usz chunk;                         // at most this many bytes per read (0 = no limit)
 	bool eof_when_exhausted;           // true: CLOSED when the script is used up; false: TIMEOUT
 	bool fail_writes;                  // every write faults with CLOSED
+	usz partial_write_bytes;           // the first write sends only this many bytes and then faults with TIMEOUT
 	usz early_timeouts;                // this many reads return TIMEOUT at once although data is waiting
 	time::Clock* clock_ref;            // a silent PLC: each TIMEOUT moves this clock ahead by `advance`
 	time::Duration advance;
@@ -102,6 +103,17 @@ fn void? MemTransport.write(&self, char[] data, time::Duration timeout) @dynamic
 {
 	if (self.write_calls < MEM_RECORDS) self.write_timeouts[self.write_calls] = timeout;
 	if (self.fail_writes) return CLOSED~;
+	if (self.partial_write_bytes > 0)
+	{
+		// part of the frame went out, then the write timed out: the stream position is unknown
+		usz n = self.partial_write_bytes < data.len ? self.partial_write_bytes : data.len;
+		self.partial_write_bytes = 0;
+		self.written[self.written_len:n] = data[:n];
+		self.written_len += n;
+		self.write_lens[self.write_calls] = n;
+		self.write_calls++;
+		return TIMEOUT~;
+	}
 	assert(self.written_len + data.len <= MEM_WRITTEN_CAP && self.write_calls < MEM_RECORDS);
 	self.written[self.written_len:data.len] = data[..];
 	self.write_lens[self.write_calls] = data.len;

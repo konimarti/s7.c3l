@@ -52,8 +52,30 @@ fn void? read_a_word(Transport transport)
 `read`, `read_bytes`, `read_value`, `write` and `write_bytes` (the latter two need `allow_write`), `read_szl`,
 `cpu_info`, `cpu_state` and `read_clock` return the PLC's answer or a fault.
 
+## TCP
+
+`tcp_connect(host, port = 102, timeout)` returns a `TcpTransport` for the `Client`: reads and writes wait with `poll`
+(`WSAPoll` on Windows) so the timeouts are real, TCP_NODELAY is on, and sends do not raise SIGPIPE (`MSG_NOSIGNAL` on
+Linux, `SO_NOSIGPIPE` on macOS and the BSDs). A connection that cannot be established is `CONNECT_REFUSED`.
+
+## Testing against a peer
+
+The tests in `src/test/peer_test.c3` run against the python-snap7 server when `S7_PEER=host:port` is set and are skipped
+otherwise (each prints `PEER-RUN <name>` or `PEER-SKIP <name>`); with `S7_PEER_REQUIRED=1` a missing peer is a failure.
+
+```sh
+# python-snap7 must be installed for the interpreter; S7_PEER_PYTHON defaults to python3
+"${S7_PEER_PYTHON:-python3}" scripts/run_peer.py 10102 &
+S7_PEER=127.0.0.1:10102 S7_PEER_REQUIRED=1 c3c test
+```
+
+`c3c build peercheck` builds a small runner for the same cases (`S7_PEER=127.0.0.1:10102 build/peercheck`; `--capture`
+prints every frame that goes over the wire).
+
 ## Known unverified items
 
+- The python-snap7 server answers SZL 0x001C with a record length of 0 (not like a real PLC) and reads a bit as a whole byte;
+  it never fragments an SZL answer.
 - Timers and counters are written as octet strings (transport size 0x09); the receiving side is unverified.
 - Continuation SZL request layout (F13): multi-fragment continuation requests echo the sequence number in the parameter; unverified against hardware.
 

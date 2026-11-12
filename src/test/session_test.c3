@@ -976,3 +976,27 @@ fn void test_leak_check_detects_a_forgotten_completion() @test
 	assert(!r.alloc.has_leaks());
 	r.alloc.free();
 }
+
+fn void test_a_job_is_refused_while_a_completion_is_still_queued() @test
+{
+	Rig r;
+	r.start(config_480());
+	r.connect_480();
+	r.read("DB1.DBW2", at_ms(10));
+	r.s.consume_output(r.s.pending_output().len);
+	r.feed_hex(FX_V21, at_ms(11));                       // the job is done, its completion is not taken
+	Address[1] items = { addr("DB1.DBW2") };
+	assert(@catch(r.s.submit_read(items[..], at_ms(12))) == BUSY);
+	assert(r.s.state == READY && r.s.pending_output().len == 0);
+	r.expect(JOB_DONE).completion.free();
+	// nine jobs in a row, every completion taken: none is lost
+	for (usz i = 0; i < 9; i++)
+	{
+		r.read("DB1.DBW2", at_ms(20 + i));
+		r.s.consume_output(r.s.pending_output().len);
+		Fixture reply = with_ref(FX_V21, (ushort)(3 + i));
+		r.s.feed(reply.bytes(), at_ms(30 + i))!!;
+		r.expect(JOB_DONE).completion.free();
+	}
+	r.finish();
+}

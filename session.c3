@@ -362,6 +362,7 @@ fn RequestId? Session.start_job(&self, JobKind kind, Address[] items, char[][] d
 {
 	if (self.state == JOB_IN_FLIGHT) return BUSY~;
 	if (self.state != READY) return NOT_CONNECTED~;
+	if (self.ev_len > 0) return BUSY~;   // events not taken yet: a new job could fill the queue and lose a completion
 	if (items.len == 0) return INVALID_ARGUMENT~;
 	if (kind == WRITE)
 	{
@@ -619,6 +620,7 @@ fn void? Session.start_userdata_job(&self, JobKind kind)
 {
 	if (self.state == JOB_IN_FLIGHT) return BUSY~;
 	if (self.state != READY) return NOT_CONNECTED~;
+	if (self.ev_len > 0) return BUSY~;   // events not taken yet: a new job could fill the queue and lose a completion
 	self.job = {};
 	self.job.kind = kind;
 	self.job.reassembly = szl_assembler_init(self.cfg.limits, self.allocator);

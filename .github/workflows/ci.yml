@@ -1,0 +1,122 @@
+name: CI
+on:
+  push:
+    branches: [ master, ci_testing ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'C3 compiler version to use'
+        required: false
+        default: 'v0.8.6'
+
+env:
+  C3_VERSION: v0.8.6
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup C3
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version || env.C3_VERSION }}"
+          mkdir -p /opt/c3
+          wget -O /tmp/c3.tar.gz "https://github.com/c3lang/c3c/releases/download/${VERSION}/c3-linux.tar.gz"
+          tar -xzf /tmp/c3.tar.gz -C /opt/c3 --strip-components=1
+          echo "/opt/c3" >> "$GITHUB_PATH"
+
+      - name: Run unit tests
+        run: c3c test
+
+      - name: Build s7tool
+        run: c3c build s7tool
+
+      - name: s7tool --help
+        run: build/s7tool --help
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup C3
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version || env.C3_VERSION }}"
+          mkdir -p /tmp/c3dl
+          curl -fsSL -o /tmp/c3.zip "https://github.com/c3lang/c3c/releases/download/${VERSION}/c3-macos.zip"
+          unzip -q /tmp/c3.zip -d /tmp/c3dl
+          C3C=$(find /tmp/c3dl -type f -name c3c | head -1)
+          chmod +x "$C3C"
+          echo "$(dirname "$C3C")" >> "$GITHUB_PATH"
+
+      - name: Run unit tests
+        run: c3c test
+
+      - name: Build s7tool
+        run: c3c build s7tool
+
+      - name: s7tool --help
+        run: build/s7tool --help
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup C3
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version || env.C3_VERSION }}"
+          mkdir -p /tmp/c3dl
+          curl -fsSL -o /tmp/c3.zip "https://github.com/c3lang/c3c/releases/download/${VERSION}/c3-windows.zip"
+          unzip -q /tmp/c3.zip -d /tmp/c3dl
+          C3C=$(find /tmp/c3dl -type f -name c3c.exe | head -1)
+          echo "$(dirname "$(cygpath -w "$C3C")")" >> "$GITHUB_PATH"
+
+      - name: Run unit tests
+        run: c3c test
+
+      - name: Build s7tool
+        run: c3c build s7tool
+
+      - name: s7tool --help
+        run: build/s7tool --help
+
+  # Optional: the same tests against the python-snap7 server. Does not fail the workflow while the peer is new.
+  peer:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup C3
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version || env.C3_VERSION }}"
+          mkdir -p /opt/c3
+          wget -O /tmp/c3.tar.gz "https://github.com/c3lang/c3c/releases/download/${VERSION}/c3-linux.tar.gz"
+          tar -xzf /tmp/c3.tar.gz -C /opt/c3 --strip-components=1
+          echo "/opt/c3" >> "$GITHUB_PATH"
+
+      - name: Install python-snap7
+        run: python3 -m pip install python-snap7
+
+      - name: Start the peer
+        run: |
+          python3 scripts/run_peer.py 1102 > peer.log 2>&1 &
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if grep -q READY peer.log; then break; fi
+            sleep 1
+          done
+          cat peer.log
+
+      - name: Run unit tests against the peer
+        env:
+          S7_PEER: 127.0.0.1:1102
+          S7_PEER_REQUIRED: "1"
+        run: c3c test

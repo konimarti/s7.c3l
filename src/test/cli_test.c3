@@ -374,3 +374,25 @@ fn void test_info_stays_ok_when_the_plc_just_does_not_know_a_list() @test
 	assert(s7tool::cmd_info(&r.c) == s7tool::EXIT_OK);
 	r.finish();
 }
+
+fn void test_dump_offsets_are_not_cut_at_four_digits() @test
+{
+	TrackingAllocator t;
+	t.init(mem);
+	char[2] data = { 1, 2 };
+	String high = s7tool::format_dump(data[..], 0x12340, &t);
+	assert(high[:7] == "12340  ", "offset column: %s", high);
+	alloc::free(&t, high.ptr);
+	String low = s7tool::format_dump(data[..], 0x0100, &t);
+	assert(low[:6] == "0100  ");
+	alloc::free(&t, low.ptr);
+	// a dump that crosses 0xFFFF prints every offset with the same width
+	char[32] big;
+	String across = s7tool::format_dump(big[..], 0xFFF0, &t);
+	assert(across[:7] == "FFF0   " || across[:7] == "0FFF0  ", "first offset: %s", across);
+	String line2 = across[(across.len / 2)..];
+	assert(line2[:5] == "10000" || line2[:6] == "010000", "second line: %s", line2);
+	alloc::free(&t, across.ptr);
+	assert(!t.has_leaks());
+	t.free();
+}

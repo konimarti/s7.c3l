@@ -484,11 +484,14 @@ fn String format_dump(char[] data, usz start, Allocator allocator)
 	usz cap = lines * 80;
 	char[] out = alloc::new_array(allocator, char, (sz)cap)[:cap];
 	usz at = 0;
+	// at least four hex digits, more when the largest offset needs them (addresses reach 2^21 - 1)
+	int digits = 4;
+	while (((start + (lines - 1) * 16) >> (4 * digits)) != 0) digits++;
 	for (usz line = 0; line < lines; line++)
 	{
 		usz base = line * 16;
 		usz offset = start + base;
-		for (int shift = 12; shift >= 0; shift -= 4) out[at++] = HEX_DIGITS[(offset >> shift) & 0xF];
+		for (int d = digits - 1; d >= 0; d--) out[at++] = HEX_DIGITS[(offset >> (4 * d)) & 0xF];
 		out[at++] = ' ';
 		out[at++] = ' ';
 		for (usz k = 0; k < 16; k++)

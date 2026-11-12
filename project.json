@@ -1,0 +1,12 @@
+{
+	"authors": [ "Koni Marti <koni.marti@gmail.com>" ],
+	"version": "0.1.0",
+	"output": "build",
+	"sources": [ "*", "src/test/**" ],
+	"targets": {
+		"s7tool": {
+			"type": "executable",
+			"sources": [ "example/**" ]
+		}
+	}
+}

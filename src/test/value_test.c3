@@ -667,3 +667,23 @@ fn void test_strings_need_their_declared_capacity() @test
 	assert(w.str == "AB");
 	w.free(mem);
 }
+
+fn void test_wstring_capacity_is_limited_to_16382_characters() @test
+{
+	// declared capacity 16383 and 65535 are refused outright, 16382 only lacks its data
+	assert(dec_fault(WSTRING, "3F FF 00 00") == INVALID_VALUE);
+	assert(dec_fault(WSTRING, "FF FF 00 00") == INVALID_VALUE);
+	assert(dec_fault(WSTRING, "3F FE 00 00") == VALUE_TOO_SHORT);
+	char[600] out;
+	Value v = { .kind = WSTRING, .str = "ab" };
+	assert(@catch(encode_value(&v, out[..], 16383)) == INVALID_VALUE);
+	assert(@catch(encode_value(&v, out[..], 65535)) == INVALID_VALUE);
+	assert(@catch(encode_value(&v, out[..], 16382)) == BUFFER_TOO_SMALL);
+	// a full-size buffer is accepted
+	char[] big = mem::new_array(char, 4 + 2 * 16382);
+	defer mem::free(big.ptr);
+	assert(encode_value(&v, big, 16382)!! == 4 + 2 * 16382);
+	Value back = decode_value(WSTRING, big, mem)!!;
+	assert(back.str == "ab");
+	back.free(mem);
+}

@@ -55,6 +55,7 @@ struct Value
 	}
 }
 
+const uint MAX_WSTRING_LEN = 16382;      // characters a WSTRING can declare
 const uint MAX_DATE_DAYS = 65378;          // 2168-12-31
 const uint MS_PER_DAY = 86400000;
 const uint MAX_DTL_YEAR = 2262;
@@ -295,7 +296,7 @@ fn Value? decode_wstring(char[] bytes, Allocator allocator)
 	if (bytes.len < 4) return VALUE_TOO_SHORT~;
 	usz max = (usz)get_be16(bytes, 0)!;
 	usz cur = (usz)get_be16(bytes, 2)!;
-	if (cur > max) return INVALID_VALUE~;
+	if (max > MAX_WSTRING_LEN || cur > max) return INVALID_VALUE~;
 	if (bytes.len < 4 + 2 * max) return VALUE_TOO_SHORT~;   // the header declares the whole object
 	Value v = { .kind = WSTRING };
 	v.str = utf16be_to_utf8(bytes[4:2 * cur], cur, allocator)!;
@@ -447,7 +448,7 @@ fn usz? encode_string(Value* value, char[] out, uint max_len)
 
 fn usz? encode_wstring(Value* value, char[] out, uint max_len)
 {
-	if (max_len > 0xFFFF) return INVALID_VALUE~;
+	if (max_len > MAX_WSTRING_LEN) return INVALID_VALUE~;
 	usz total = 4 + 2 * (usz)max_len;
 	if (out.len < total) return BUFFER_TOO_SMALL~;
 	String s = value.str;

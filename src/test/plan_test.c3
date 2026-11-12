@@ -367,3 +367,19 @@ fn void test_random_item_lists_respect_the_pdu_size() @test
 		}
 	}
 }
+
+fn void test_item_cap_is_twenty_even_when_the_caller_allows_more() @test
+{
+	Address[21] items;
+	foreach (&a : items) *a = addr("DB1.DBB0");
+	Plan p = plan_read(items[..], 960, 255, 1 << 20, mem)!!;
+	assert(p.pdus.len == 2 && p.pdus[0].slices.len == 20 && p.pdus[1].slices.len == 1);
+	p.free();
+	Plan w = plan_write(items[..], 960, 255, 1 << 20, mem)!!;
+	assert(w.pdus.len == 2 && w.pdus[0].slices.len == 20);
+	w.free();
+	// a smaller configured limit still applies
+	Plan q = plan_read(items[..], 960, 7, 1 << 20, mem)!!;
+	assert(q.pdus.len == 3 && q.pdus[0].slices.len == 7);
+	q.free();
+}

@@ -17,7 +17,8 @@ const usz S7_ACK_HEADER_LEN = 12;
 const usz ITEM_PARAM_BASE = 2;             // function code and item count
 const usz DATA_ITEM_OVERHEAD = 4;          // return code or reserved byte, transport size, length (2)
 const usz MIN_PLAN_PDU_SIZE = 30;          // room for one 2-byte chunk of a write
-const usz MAX_ITEMS_PER_PDU = 255;         // the item count is one byte
+const usz MAX_ITEMS_PER_PDU = 255;
+const usz ITEM_CAP_PER_PDU = 20;           // the conservative item limit of one request, which PLCs accept         // the item count is one byte
 
 // Result of one item of a response. `status` is empty on success; `raw_code` is the return code as received
 // (0xFF = success); `data` is a slice of the received frame (empty for a failed item and for writes).
@@ -101,7 +102,7 @@ fn bool PduState.fits(&self, usz len, usz pdu_size, usz max_items, bool write)
 fn Plan? plan_items(Address[] items, ushort pdu_size, ushort max_items, uint max_request_bytes, bool write, Allocator allocator)
 {
 	if (items.len == 0 || max_items == 0 || pdu_size < MIN_PLAN_PDU_SIZE) return INVALID_ARGUMENT~;
-	usz limit = max_items < MAX_ITEMS_PER_PDU ? max_items : MAX_ITEMS_PER_PDU;
+	usz limit = max_items < ITEM_CAP_PER_PDU ? max_items : ITEM_CAP_PER_PDU;   // never more than 20, whatever the caller allows
 	usz overhead = write ? 28 : 18;                      // PDU bytes around a lone chunk
 	usz max_chunk = ((usz)pdu_size - overhead) & ~(usz)1; // even, so a following item needs no extra care
 	ulong total = 0;

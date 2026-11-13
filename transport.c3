@@ -82,7 +82,10 @@ fn void? TcpTransport.write(&self, char[] data, time::Duration timeout) @dynamic
 			left = now >= deadline ? (time::Duration)0 : deadline.nano_diff(now).to_duration();
 		}
 		sys::wait_writable(&self.socket, left)!;
-		sent += sys::send_nosignal(&self.socket, data[sent..])!;
+		usz n = sys::send_nosignal(&self.socket, data[sent..])!;
+		sent += n;
+		// nothing went out although the socket reported room: the bound still holds
+		if (n == 0 && bounded && time::clock::now() >= deadline) return TIMEOUT~;
 	}
 }
 

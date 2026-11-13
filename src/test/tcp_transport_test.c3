@@ -1,6 +1,6 @@
 module s7;
 
-import std::net::tcp, std::time;
+import std::net::tcp, std::thread, std::time;
 
 // Tests of TcpTransport over the loopback interface: a listener in the test plays the other end. No peer program needed.
 
@@ -79,12 +79,27 @@ fn void test_tcp_write_to_a_closed_connection_is_an_error_not_a_signal() @test
 	l.open();
 	(void)l.server.close();
 	char[4096] data;
-	// the first write after the peer's close is accepted by the kernel and answered with a reset
+	// The first write after the peer's close is accepted by the kernel and answered with a reset. When that reset
+	// arrives differs by system (on macOS it can come after the end of the stream was already seen), so write until a
+	// write fails, within a bounded number of attempts. A write to a reset connection raises SIGPIPE unless the send is
+	// made without it: the process must survive, and the failure must be CLOSED.
 	l.client.write(data[..], time::sec(2))!!;
-	char[8] buf;
-	assert(@catch(l.client.read(buf[..], time::sec(2))) == CLOSED);
-	// writing to the reset connection raises SIGPIPE unless the send is made without it: the process must survive
-	assert(@catch(l.client.write(data[..], time::sec(2))) == CLOSED);
+	fault outcome = {};
+	bool failed = false;
+	for (usz attempt = 0; attempt < 500 && !failed; attempt++)
+	{
+		if (catch err = l.client.write(data[..], time::sec(2)))
+		{
+			outcome = err;
+			failed = true;
+		}
+		else
+		{
+			std::thread::sleep_ms(10)!!;
+		}
+	}
+	assert(failed);
+	assert(outcome == CLOSED);
 	l.finish();
 }
 
